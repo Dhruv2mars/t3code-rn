@@ -23,7 +23,17 @@ config.resolver.nodeModulesPaths = [
   path.resolve(workspaceRoot, "node_modules"),
 ];
 
+// react-native-macos is an out-of-tree fork: when bundling for macos, every
+// `react-native` import must resolve to react-native-macos, otherwise vanilla
+// RN's ios/android-only internals (e.g. ReactDevToolsSettingsManager) break
+// the bundle. See https://aka.ms/rnm-metro.
 config.resolver.resolveRequest = (context, moduleName, platform) => {
+  if (
+    platform === "macos" &&
+    (moduleName === "react-native" || moduleName.startsWith("react-native/"))
+  ) {
+    moduleName = `react-native-macos${moduleName.slice("react-native".length)}`;
+  }
   try {
     return context.resolveRequest(context, moduleName, platform);
   } catch (error) {
