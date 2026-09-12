@@ -48,6 +48,12 @@
       // electron-builder from this workspace, outside its package scripts.
       "ignoreDependencies": ["playwright-core", "electron-builder"],
     },
+    "apps/desktop-rn": {
+      // Metro's babel transform injects @babel/runtime helpers, and pnpm's
+      // layout hides it from Metro unless the app declares it; source never
+      // imports it, so knip cannot see the usage.
+      "ignoreDependencies": ["@babel/runtime"],
+    },
     "apps/web": {
       // Worktree setup invokes this directly from t3.json.
       "entry": ["scripts/warm-dep-cache.ts"],
