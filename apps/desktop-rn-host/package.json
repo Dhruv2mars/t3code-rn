@@ -1,0 +1,35 @@
+{
+  "name": "@t3tools/desktop-rn-host",
+  "version": "0.1.0",
+  "private": true,
+  "bin": {
+    "t3-rn-host": "./dist/host.cjs"
+  },
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "vp test run"
+  },
+  "dependencies": {
+    "@effect/platform-node": "catalog:",
+    "@t3tools/client-runtime": "workspace:*",
+    "@t3tools/contracts": "workspace:*",
+    "@t3tools/shared": "workspace:*",
+    "effect": "catalog:",
+    "ffi-rs": "^1.0.0",
+    "msgpackr-extract": "3.0.4",
+    "node-pty": "^1.1.0",
+    "t3": "workspace:*"
+  },
+  "devDependencies": {
+    "@effect/vitest": "catalog:",
+    "@types/node": "catalog:",
+    "esbuild": "^0.25.0",
+    "typescript": "catalog:",
+    "vite-plus": "catalog:"
+  },
+  "engines": {
+    "node": "^22.16 || ^23.11 || >=24.10"
+  }
+}
