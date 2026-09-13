@@ -1,5 +1,6 @@
 const path = require("path");
 const { getDefaultConfig } = require("@react-native/metro-config");
+const { withUniwindConfig } = require("uniwind/metro");
 
 /**
  * Metro configuration
@@ -46,4 +47,8 @@ config.resolver.resolveRequest = (context, moduleName, platform) => {
   }
 };
 
-module.exports = config;
+// Uniwind compiles `className` props at bundle time through this metro wrapper.
+// It wraps the resolver above, so the react-native-macos remap still runs.
+module.exports = withUniwindConfig(config, {
+  cssEntryFile: "./global.css",
+});
