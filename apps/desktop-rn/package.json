@@ -26,7 +26,6 @@
   },
   "devDependencies": {
     "@babel/plugin-transform-export-namespace-from": "7.29.7",
-    "@effect/vitest": "catalog:",
     "@react-native-community/cli": "20.1.3",
     "@react-native-community/cli-platform-ios": "20.1.3",
     "@react-native/babel-preset": "0.81.6",
