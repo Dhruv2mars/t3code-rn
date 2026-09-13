@@ -1,0 +1,85 @@
+name: Desktop RN Windows
+
+# First native build of apps/desktop-rn for Windows (react-native-windows 0.81
+# cpp-app template: New Architecture, C++, WinAppSDK via NuGet). Debug-only,
+# unsigned; Release and MSIX packaging come with the distribution unit.
+
+on:
+  pull_request:
+    paths:
+      - apps/desktop-rn/**
+      - apps/desktop-rn/windows/**
+      - pnpm-lock.yaml
+      - pnpm-workspace.yaml
+      - .github/workflows/desktop-rn-windows.yml
+  push:
+    branches:
+      - main
+    paths:
+      - apps/desktop-rn/**
+      - apps/desktop-rn/windows/**
+      - pnpm-lock.yaml
+      - pnpm-workspace.yaml
+      - .github/workflows/desktop-rn-windows.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-rn-windows-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  build:
+    name: Build Windows (Debug x64)
+    runs-on: windows-latest
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Check react-native-windows CLI
+        working-directory: apps/desktop-rn
+        run: npx react-native windows --help
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Build solution (Debug x64, unsigned)
+        working-directory: apps/desktop-rn/windows
+        run: msbuild T3CodeRN.sln -restore -m -p:Configuration=Debug -p:Platform=x64 -p:AppxPackageSigningEnabled=false
+
+      - name: Locate app executable
+        id: exe
+        shell: pwsh
+        run: |
+          $path = Get-ChildItem -Path apps/desktop-rn/windows -Recurse -Filter T3CodeRN.exe |
+            Select-Object -First 1 -ExpandProperty FullName
+          if (-not $path) {
+            Write-Error "No T3CodeRN.exe produced"
+            exit 1
+          }
+          $dir = Split-Path $path
+          "dir=$dir" >> $env:GITHUB_OUTPUT
+          Write-Host "Built: $dir"
+
+      - name: Upload build output
+        uses: actions/upload-artifact@v7
+        with:
+          name: t3code-rn-windows-debug
+          path: ${{ steps.exe.outputs.dir }}
+          if-no-files-found: error
+          retention-days: 14
