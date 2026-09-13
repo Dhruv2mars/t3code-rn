@@ -24,9 +24,10 @@ default_host_cjs() {
 HOST_CJS="${2:-$(default_host_cjs)}"
 NODE_BIN="${3:-$(command -v node)}"
 
-APP_BIN="$APP_ROOT/macos/build/Build/Products/Debug/T3CodeRN-macOS.app/Contents/MacOS/T3CodeRN-macOS"
-if [ ! -x "$APP_BIN" ]; then
-  echo "debug app not built at $APP_BIN" >&2
+APP_DIR="$(ls -d "$APP_ROOT"/macos/build/Build/Products/Debug/*.app 2>/dev/null | head -1)"
+APP_BIN="$APP_DIR/Contents/MacOS/$(basename "${APP_DIR%.app}")"
+if [ -z "${APP_DIR:-}" ] || [ ! -x "$APP_BIN" ]; then
+  echo "debug app not built under $APP_ROOT/macos/build/Build/Products/Debug" >&2
   exit 1
 fi
 if [ -z "$HOST_CJS" ] || [ ! -f "$HOST_CJS" ]; then
@@ -38,8 +39,7 @@ if [ -z "$NODE_BIN" ]; then
   exit 1
 fi
 
-BUNDLE_ID="$(/usr/libexec/PlistBuddy -c 'Print CFBundleIdentifier' \
-  "$APP_ROOT/macos/build/Build/Products/Debug/T3CodeRN-macOS.app/Contents/Info.plist")"
+BUNDLE_ID="$(/usr/libexec/PlistBuddy -c 'Print CFBundleIdentifier' "$APP_DIR/Contents/Info.plist")"
 
 restore_js_location() {
   defaults delete "$BUNDLE_ID" RCT_jsLocation >/dev/null 2>&1 || true
