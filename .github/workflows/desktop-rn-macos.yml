@@ -57,7 +57,7 @@ jobs:
       - name: Build app (Debug, unsigned)
         working-directory: apps/desktop-rn/macos
         run: |
-          workspace="$(ls *.xcworkspace | head -1)"
+          workspace="$(ls -d *.xcworkspace | head -1)"
           echo "Using workspace: $workspace"
           xcodebuild \
             -workspace "$workspace" \
