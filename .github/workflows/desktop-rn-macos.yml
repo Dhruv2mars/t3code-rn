@@ -1,0 +1,88 @@
+name: Desktop RN macOS
+
+# First native build of apps/desktop-rn (bare React Native 0.81 +
+# react-native-macos). Debug-only: signing and Release come with the
+# distribution unit. The .app is uploaded unsigned so it can be downloaded
+# and launched locally for runtime verification.
+
+on:
+  pull_request:
+    paths:
+      - apps/desktop-rn/**
+      - pnpm-lock.yaml
+      - pnpm-workspace.yaml
+      - .github/workflows/desktop-rn-macos.yml
+  push:
+    branches:
+      - main
+    paths:
+      - apps/desktop-rn/**
+      - pnpm-lock.yaml
+      - pnpm-workspace.yaml
+      - .github/workflows/desktop-rn-macos.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-rn-macos-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  build:
+    name: Build macOS (Debug)
+    runs-on: macos-latest
+    timeout-minutes: 60
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Pod install
+        working-directory: apps/desktop-rn/macos
+        run: pod install
+
+      - name: Build app (Debug, unsigned)
+        working-directory: apps/desktop-rn/macos
+        run: |
+          workspace="$(ls *.xcworkspace | head -1)"
+          echo "Using workspace: $workspace"
+          xcodebuild \
+            -workspace "$workspace" \
+            -scheme T3CodeRN-macOS \
+            -configuration Debug \
+            -destination 'platform=macOS' \
+            -derivedDataPath build \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+
+      - name: Locate app bundle
+        id: app
+        run: |
+          path="$(find apps/desktop-rn/macos/build/Build/Products/Debug -maxdepth 1 -name '*.app' -type d | head -1)"
+          if [ -z "$path" ]; then
+            echo "No .app produced" >&2
+            exit 1
+          fi
+          echo "path=$path" >> "$GITHUB_OUTPUT"
+          echo "Built: $path"
+
+      - name: Upload app bundle
+        uses: actions/upload-artifact@v7
+        with:
+          name: t3code-rn-macos-debug
+          path: ${{ steps.app.outputs.path }}
+          if-no-files-found: error
+          retention-days: 14

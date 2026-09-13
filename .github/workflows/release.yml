@@ -1,13 +1,10 @@
 name: Release
 
+# Fork gate: tag pushes and the twice-hourly nightly schedule only make sense
+# on pingdotgg/t3code (signing keys, upload targets). Workflow_dispatch stays
+# so the pipeline remains inspectable; scheduled and tag-triggered runs are
+# removed so the fork's Actions tab stays quiet.
 on:
-  push:
-    tags:
-      - "v*.*.*"
-      - "!v*-nightly.*"
-  schedule:
-    # Avoid minute zero, when GitHub scheduled jobs are busiest.
-    - cron: "8,38 * * * *"
   workflow_dispatch:
     inputs:
       channel:
