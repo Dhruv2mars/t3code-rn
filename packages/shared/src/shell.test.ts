@@ -1,3 +1,6 @@
+import * as NodeFS from "node:fs";
+import * as NodeOS from "node:os";
+import * as NodePath from "node:path";
 import * as NodeServices from "@effect/platform-node/NodeServices";
 import { it as effectIt } from "@effect/vitest";
 import { HostProcessEnvironment, HostProcessPlatform } from "@t3tools/shared/hostProcess";
@@ -166,6 +169,38 @@ describe("readEnvironmentFromLoginShell", () => {
     expect(readEnvironmentFromLoginShell("/bin/zsh", ["CUSTOM_VAR"], execFile)).toEqual({
       CUSTOM_VAR: "  padded value  ",
     });
+  });
+});
+
+describe("readEnvironmentFromLoginShell stderr", () => {
+  it("keeps the probe shell's stderr off the parent process stderr", () => {
+    const dir = NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-quiet-probe-"));
+    const probeShell = NodePath.join(dir, "noisy-login-shell.sh");
+    NodeFS.writeFileSync(
+      probeShell,
+      [
+        "#!/bin/sh",
+        "printf '%s\\n' 'bash: no job control in this shell' >&2",
+        "printf '%s\\n' '__T3CODE_ENV_PATH_START__'",
+        "printf '%s\\n' '/probe-a:/probe-b'",
+        "printf '%s\\n' '__T3CODE_ENV_PATH_END__'",
+      ].join("\n") + "\n",
+    );
+    NodeFS.chmodSync(probeShell, 0o755);
+
+    const stderrWrites: Array<string> = [];
+    const writeStderr = vi.spyOn(process.stderr, "write").mockImplementation((chunk) => {
+      stderrWrites.push(String(chunk));
+      return true;
+    });
+
+    try {
+      expect(readPathFromLoginShell(probeShell)).toBe("/probe-a:/probe-b");
+    } finally {
+      writeStderr.mockRestore();
+    }
+
+    expect(stderrWrites.join("")).not.toContain("no job control");
   });
 });
 
