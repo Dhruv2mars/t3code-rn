@@ -2,20 +2,12 @@ import {
   bootstrapRemoteBearerSession,
   issueRemoteWebSocketTicket,
 } from "@t3tools/client-runtime/authorization";
-import { WS_METHODS, WsRpcGroup } from "@t3tools/contracts";
 import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
-import * as Option from "effect/Option";
-import * as Schedule from "effect/Schedule";
-import type * as Scope from "effect/Scope";
-import * as Socket from "effect/unstable/socket/Socket";
-import * as Stream from "effect/Stream";
 import { FetchHttpClient, HttpClient } from "effect/unstable/http";
-import { RpcClient, RpcSerialization } from "effect/unstable/rpc";
 
 import { spawnSidecar, type RunningSidecar } from "../sidecar/spawner";
-import { rawWebSocketProbe } from "./rawProbe";
 
 // Mirrors client-runtime's remoteHttpClientLayer (fetch-based, Hermes-safe);
 // inlined so the app does not depend on the client-runtime /rpc barrel at
@@ -55,7 +47,7 @@ const isHandshake = (value: unknown): value is HostHandshake =>
   typeof (value as HostHandshake).port === "number" &&
   typeof (value as HostHandshake).token === "string";
 
-const describeCause = (cause: unknown): string => {
+export const describeCause = (cause: unknown): string => {
   if (
     typeof cause === "object" &&
     cause !== null &&
@@ -68,80 +60,9 @@ const describeCause = (cause: unknown): string => {
   return String(cause);
 };
 
-// Socket failures bury the underlying event in a cause chain; surface it all.
-const describeCauseDeep = (cause: unknown, depth = 0): string => {
-  if (depth > 4 || typeof cause !== "object" || cause === null) return describeCause(cause);
-  const own = describeCause(cause);
-  const inner = (cause as { cause?: unknown }).cause;
-  return inner === undefined ? own : `${own} | cause: ${describeCauseDeep(inner, depth + 1)}`;
-};
-
 const HANDSHAKE_TIMEOUT = "30 seconds";
-const SESSION_READY_TIMEOUT = "15 seconds";
 
-// The smoke test's protocol stack: WebSocket socket layer, JSON RPC
-// serialization, and the socket protocol client over the real WsRpcGroup.
-const firstServerConfigSnapshot = (
-  socketUrl: string,
-  onEvent: ConnectPipelineInput["onEvent"],
-): Effect.Effect<EnvironmentSnapshot, ConnectFailure, Scope.Scope> => {
-  // Raw probe on the exact same URL while effect's socket opens; a split
-  // verdict locates the failure (effect usage vs URL/ticket).
-  rawWebSocketProbe(socketUrl).then((result) =>
-    onEvent({ tag: "debug", detail: `raw probe: ${result}` }),
-  );
-  onEvent({
-    tag: "debug",
-    detail: `ws attempt: ${socketUrl.replace(/wsTicket=[^&]+/, (m) => `wsTicket=<len ${m.length - 9}>`)}`,
-  });
-  const hooks = RpcClient.ConnectionHooks.of({
-    onConnect: Effect.void,
-    onDisconnect: Effect.void,
-  });
-  const socketLayer = Socket.layerWebSocket(socketUrl, {
-    openTimeout: SESSION_READY_TIMEOUT,
-  }).pipe(Layer.provide(Socket.layerWebSocketConstructorGlobal));
-  const protocolLayer = Layer.effect(
-    RpcClient.Protocol,
-    RpcClient.makeProtocolSocket({
-      retryTransientErrors: false,
-      retryPolicy: Schedule.recurs(0),
-    }),
-  ).pipe(
-    Layer.provide(
-      Layer.mergeAll(
-        socketLayer,
-        RpcSerialization.layerJson,
-        Layer.succeed(RpcClient.ConnectionHooks, hooks),
-      ),
-    ),
-  );
-  return RpcClient.make(WsRpcGroup).pipe(
-    Effect.flatMap((client) =>
-      client[WS_METHODS.subscribeServerConfig]({}).pipe(
-        Stream.take(1),
-        Stream.runHead,
-        Effect.flatMap((head) =>
-          Option.isNone(head)
-            ? Effect.fail(
-                new ConnectFailure({
-                  stage: "rpc",
-                  message: "subscribeServerConfig ended without a snapshot event",
-                }),
-              )
-            : Effect.succeed(snapshotOf(head.value)),
-        ),
-      ),
-    ),
-    Effect.provide(protocolLayer),
-    Effect.timeout(SESSION_READY_TIMEOUT),
-    Effect.mapError(
-      (cause) => new ConnectFailure({ stage: "rpc", message: describeCauseDeep(cause) }),
-    ),
-  );
-};
-
-const snapshotOf = (event: unknown): EnvironmentSnapshot => {
+export const snapshotOf = (event: unknown): EnvironmentSnapshot => {
   if (
     typeof event !== "object" ||
     event === null ||
@@ -225,9 +146,19 @@ export interface ConnectPipelineInput {
   readonly onEvent: (event: ConnectEvent) => void;
 }
 
-export const runConnectionPipeline = (
+export interface SidecarTransport {
+  readonly sidecar: RunningSidecar;
+  readonly wsUrl: string;
+}
+
+/**
+ * Spawns the sidecar and walks every stage up to a ready WebSocket URL.
+ * Consumers decide how to use it: a one-shot config probe (the U-007
+ * pipeline) or a long-lived RPC session (the thread view).
+ */
+export const connectTransport = (
   input: ConnectPipelineInput,
-): Effect.Effect<EnvironmentSnapshot, ConnectFailure> =>
+): Effect.Effect<SidecarTransport, ConnectFailure> =>
   Effect.gen(function* () {
     input.onEvent({ tag: "stage", stage: "spawn" });
     const sidecar = yield* Effect.tryPromise({
@@ -290,6 +221,9 @@ export const runConnectionPipeline = (
     const wsUrl = `${wsBaseUrl}/ws?wsTicket=${encodeURIComponent(issued.ticket)}`;
 
     input.onEvent({ tag: "stage", stage: "ws" });
-    input.onEvent({ tag: "stage", stage: "rpc" });
-    return yield* Effect.scoped(firstServerConfigSnapshot(wsUrl, input.onEvent));
+    input.onEvent({
+      tag: "debug",
+      detail: `ws attempt: ${wsUrl.replace(/wsTicket=[^&]+/, (m) => `wsTicket=<len ${m.length - 9}>`)}`,
+    });
+    return { sidecar, wsUrl };
   }).pipe(Effect.provide(remoteHttpClientLayer(globalThis.fetch)));

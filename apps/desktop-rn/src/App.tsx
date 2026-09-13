@@ -1,23 +1,25 @@
 import type { JSX } from "react";
 import { useEffect, useRef, useState } from "react";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
-import * as Effect from "effect/Effect";
 
 import { devLog } from "./devLog";
 
 import {
-  ConnectFailure,
-  runConnectionPipeline,
   type ConnectEvent,
   type ConnectStage,
   type EnvironmentSnapshot,
 } from "./connection/connect";
 import { T3SidecarSpawner } from "./sidecar/spawner";
+import { openThreadSession, type ThreadSession } from "./thread/session";
 import { DesktopShell } from "./shell/DesktopShell";
 
 type Phase =
   | { readonly tag: "connecting"; readonly stage: ConnectStage }
-  | { readonly tag: "connected"; readonly snapshot: EnvironmentSnapshot }
+  | {
+      readonly tag: "connected";
+      readonly snapshot: EnvironmentSnapshot;
+      readonly session: ThreadSession;
+    }
   | { readonly tag: "failed"; readonly stage: ConnectStage; readonly message: string };
 
 const stageHeading = (stage: ConnectStage): string => {
@@ -71,65 +73,58 @@ function App(): JSX.Element {
           });
           return;
         }
-        void Effect.runPromise(
-          runConnectionPipeline({
-            nodeBin,
-            hostCjs,
-            onEvent: (event: ConnectEvent) => {
-              if (cancelled) return;
-              switch (event.tag) {
-                case "stage":
-                  lastStage = event.stage;
-                  setPhase({ tag: "connecting", stage: event.stage });
-                  break;
-                case "sidecarSpawned":
-                  appendLog(`sidecar spawned (pid ${event.pid})`);
-                  break;
-                case "handshake":
-                  appendLog(`handshake ok (port ${event.port})`);
-                  break;
-                case "bearerSession":
-                  appendLog("bootstrap token exchanged for bearer session");
-                  break;
-                case "wsTicket":
-                  appendLog("WebSocket ticket issued");
-                  break;
-                case "debug":
-                  appendLog(event.detail);
-                  break;
-                case "sidecarExit":
-                  appendLog(`sidecar exited (code ${event.code})`);
-                  setPhase((current) =>
-                    current.tag === "connecting"
-                      ? {
-                          tag: "failed",
-                          stage: lastStage,
-                          message: `sidecar exited (code ${event.code})`,
-                        }
-                      : current,
-                  );
-                  break;
-              }
-            },
-          }),
-        )
-          .then((snapshot) => {
+        openThreadSession({
+          nodeBin,
+          hostCjs,
+          onEvent: (event: ConnectEvent) => {
+            if (cancelled) return;
+            switch (event.tag) {
+              case "stage":
+                lastStage = event.stage;
+                setPhase({ tag: "connecting", stage: event.stage });
+                break;
+              case "sidecarSpawned":
+                appendLog(`sidecar spawned (pid ${event.pid})`);
+                break;
+              case "handshake":
+                appendLog(`handshake ok (port ${event.port})`);
+                break;
+              case "bearerSession":
+                appendLog("bootstrap token exchanged for bearer session");
+                break;
+              case "wsTicket":
+                appendLog("WebSocket ticket issued");
+                break;
+              case "debug":
+                appendLog(event.detail);
+                break;
+              case "sidecarExit":
+                appendLog(`sidecar exited (code ${event.code})`);
+                setPhase((current) =>
+                  current.tag === "connecting"
+                    ? {
+                        tag: "failed",
+                        stage: lastStage,
+                        message: `sidecar exited (code ${event.code})`,
+                      }
+                    : current,
+                );
+                break;
+            }
+          },
+          onReady: (session, snapshot) => {
             if (cancelled) return;
             devLog(
-              `[u007] connected: ${snapshot.label} · ${snapshot.os}/${snapshot.arch} · server ${snapshot.serverVersion} · cwd ${snapshot.cwd}`,
+              `[u011] live session ready: ${snapshot.label} · ${snapshot.os}/${snapshot.arch} · server ${snapshot.serverVersion} · cwd ${snapshot.cwd}`,
             );
-            setPhase({ tag: "connected", snapshot });
-          })
-          .catch((cause: unknown) => {
+            setPhase({ tag: "connected", snapshot, session });
+          },
+          onFatal: (stage, message) => {
             if (cancelled) return;
-            const failure =
-              cause instanceof ConnectFailure
-                ? cause
-                : new ConnectFailure({ stage: "rpc", message: String(cause) });
-            const stack = cause instanceof Error && cause.stack ? `\n${cause.stack}` : "";
-            devLog(`[u007] failed at ${failure.stage}: ${failure.message}${stack}`);
-            setPhase({ tag: "failed", stage: failure.stage, message: failure.message });
-          });
+            devLog(`[u011] session failed at ${stage}: ${message}`);
+            setPhase({ tag: "failed", stage, message });
+          },
+        });
       })
       .catch((cause: unknown) => {
         setPhase({ tag: "failed", stage: "spawn", message: String(cause) });
@@ -142,7 +137,7 @@ function App(): JSX.Element {
   // The desktop shell owns the whole window once connected; the diagnostic
   // view below stays as the fallback for connecting/failed states.
   if (phase.tag === "connected") {
-    return <DesktopShell snapshot={phase.snapshot} />;
+    return <DesktopShell session={phase.session} snapshot={phase.snapshot} />;
   }
 
   return (
