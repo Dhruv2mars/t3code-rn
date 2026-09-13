@@ -3,6 +3,7 @@ import { StyleSheet, View } from "react-native";
 import type { HandledKeyEvent, KeyEvent } from "react-native/Libraries/Types/CoreEventTypes";
 
 import { AppText, tokens } from "../components/AppText";
+import { sidebarColors } from "./colors";
 import { ThreadView } from "../thread/ThreadView";
 import type { ThreadSession } from "../thread/session";
 
@@ -59,7 +60,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
   },
   pane: {
-    backgroundColor: tokens.screen,
+    backgroundColor: sidebarColors.mainBg,
     flex: 1,
     minHeight: 0,
   },
