@@ -13,6 +13,7 @@ import {
   type EnvironmentSnapshot,
 } from "./connection/connect";
 import { T3SidecarSpawner } from "./sidecar/spawner";
+import { DesktopShell } from "./shell/DesktopShell";
 
 type Phase =
   | { readonly tag: "connecting"; readonly stage: ConnectStage }
@@ -138,15 +139,16 @@ function App(): JSX.Element {
     };
   }, []);
 
+  // The desktop shell owns the whole window once connected; the diagnostic
+  // view below stays as the fallback for connecting/failed states.
+  if (phase.tag === "connected") {
+    return <DesktopShell snapshot={phase.snapshot} />;
+  }
+
   return (
     <View style={styles.container}>
       {phase.tag === "connecting" ? (
         <Text style={styles.title}>{`Connecting — ${stageHeading(phase.stage)}…`}</Text>
-      ) : null}
-      {phase.tag === "connected" ? (
-        <Text style={[styles.title, styles.connected]}>
-          {`Connected: ${phase.snapshot.label} · ${phase.snapshot.os}/${phase.snapshot.arch} · server ${phase.snapshot.serverVersion}`}
-        </Text>
       ) : null}
       {phase.tag === "failed" ? (
         <View style={styles.banner}>

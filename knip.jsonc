@@ -52,7 +52,9 @@
       // Metro's babel transform injects @babel/runtime helpers, and pnpm's
       // layout hides it from Metro unless the app declares it; source never
       // imports it, so knip cannot see the usage.
-      "ignoreDependencies": ["@babel/runtime"],
+      // @legendapp/list is kept for the planned LegendList re-enable; the
+      // shell currently ships a keyed ScrollView fallback.
+      "ignoreDependencies": ["@babel/runtime", "@legendapp/list"],
     },
     "apps/desktop-rn-host": {
       // src/host.ts is the esbuild entry point, never imported by source.

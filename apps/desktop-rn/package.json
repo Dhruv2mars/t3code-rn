@@ -5,6 +5,7 @@
   "main": "index.js",
   "scripts": {
     "typecheck": "tsc --noEmit",
+    "test": "vp test run",
     "start": "react-native start",
     "bundle:macos": "react-native bundle --platform macos --dev false --entry-file index.js --bundle-output build/index.macos.bundle --assets-dest build/macos-assets",
     "bundle:windows": "react-native bundle --platform windows --dev false --entry-file index.js --bundle-output build/index.windows.bundle --assets-dest build/windows-assets",
@@ -13,6 +14,7 @@
   },
   "dependencies": {
     "@babel/runtime": "^7.28.0",
+    "@legendapp/list": "catalog:",
     "@t3tools/client-runtime": "workspace:*",
     "@t3tools/contracts": "workspace:*",
     "effect": "catalog:",
@@ -29,7 +31,8 @@
     "@react-native/babel-preset": "0.81.6",
     "@react-native/metro-config": "0.81.6",
     "@types/react": "~19.2.0",
-    "typescript": "catalog:"
+    "typescript": "catalog:",
+    "vite-plus": "catalog:"
   },
   "react-native-windows": {
     "init-windows": {
