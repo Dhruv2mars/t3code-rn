@@ -7,7 +7,9 @@
     "typecheck": "tsc --noEmit",
     "start": "react-native start",
     "bundle:macos": "react-native bundle --platform macos --dev false --entry-file index.js --bundle-output build/index.macos.bundle --assets-dest build/macos-assets",
-    "macos": "react-native run-macos"
+    "bundle:windows": "react-native bundle --platform windows --dev false --entry-file index.js --bundle-output build/index.windows.bundle --assets-dest build/windows-assets",
+    "macos": "react-native run-macos",
+    "windows": "npx @react-native-community/cli run-windows"
   },
   "dependencies": {
     "@babel/runtime": "^7.28.0",
@@ -17,7 +19,8 @@
     "fast-text-encoding": "^1.0.6",
     "react": "19.1.0",
     "react-native": "0.81.6",
-    "react-native-macos": "0.81.9"
+    "react-native-macos": "0.81.9",
+    "react-native-windows": "0.81.35"
   },
   "devDependencies": {
     "@babel/plugin-transform-export-namespace-from": "7.29.7",
@@ -27,5 +30,12 @@
     "@react-native/metro-config": "0.81.6",
     "@types/react": "~19.2.0",
     "typescript": "catalog:"
+  },
+  "react-native-windows": {
+    "init-windows": {
+      "name": "T3CodeRN",
+      "namespace": "T3CodeRN",
+      "template": "cpp-app"
+    }
   }
 }
