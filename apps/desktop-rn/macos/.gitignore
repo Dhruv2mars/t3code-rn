@@ -1,2 +1,5 @@
 # CocoaPods
 Pods/
+
+# React Native
+.xcode.env.local
