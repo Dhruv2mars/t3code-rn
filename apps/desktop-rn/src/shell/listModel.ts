@@ -6,10 +6,22 @@ export interface ShellThreadGroup {
   readonly threads: ReadonlyArray<OrchestrationThreadShell>;
 }
 
-/** Flat sidebar list items: one header per project followed by its threads. */
+/**
+ * Flat sidebar list items. Every rendered row carries its project title for
+ * the chip line; settled threads collapse behind one header item.
+ */
 export type ShellListItem =
-  | { readonly type: "header"; readonly key: string; readonly project: OrchestrationProjectShell }
-  | { readonly type: "thread"; readonly key: string; readonly thread: OrchestrationThreadShell };
+  | {
+      readonly type: "thread";
+      readonly key: string;
+      readonly projectTitle: string;
+      readonly thread: OrchestrationThreadShell;
+    }
+  | { readonly type: "settled-header"; readonly key: "settled"; readonly count: number };
+
+export function isThreadSettled(thread: OrchestrationThreadShell): boolean {
+  return thread.settledAt !== null || thread.settledOverride === "settled";
+}
 
 export function groupThreadsByProject(
   projects: ReadonlyArray<OrchestrationProjectShell>,
@@ -37,22 +49,46 @@ export function groupThreadsByProject(
 export function buildShellListItems(
   groups: ReadonlyArray<ShellThreadGroup>,
   query: string,
+  settledExpanded: boolean,
 ): ShellListItem[] {
   const needle = query.trim().toLowerCase();
+  const matches = (thread: OrchestrationThreadShell): boolean =>
+    needle.length === 0 || thread.title.toLowerCase().includes(needle);
   const items: ShellListItem[] = [];
+  const settled: OrchestrationThreadShell[] = [];
   for (const group of groups) {
-    const visible =
-      needle.length === 0
-        ? group.threads
-        : group.threads.filter((thread) => thread.title.toLowerCase().includes(needle));
-    if (visible.length === 0) continue;
-    items.push({ type: "header", key: `header:${group.project.id}`, project: group.project });
-    for (const thread of visible) {
-      items.push({ type: "thread", key: `thread:${thread.id}`, thread });
+    for (const thread of group.threads) {
+      if (!matches(thread)) continue;
+      if (isThreadSettled(thread)) {
+        settled.push(thread);
+      } else {
+        items.push({
+          type: "thread",
+          key: `thread:${thread.id}`,
+          projectTitle: group.project.title,
+          thread,
+        });
+      }
+    }
+  }
+  if (settled.length > 0) {
+    items.push({ type: "settled-header", key: "settled", count: settled.length });
+    if (settledExpanded) {
+      for (const thread of settled) {
+        items.push({
+          type: "thread",
+          key: `thread:${thread.id}`,
+          projectTitle: settledProjectTitle(groups, thread.projectId),
+          thread,
+        });
+      }
     }
   }
   return items;
 }
+
+const settledProjectTitle = (groups: ReadonlyArray<ShellThreadGroup>, projectId: string): string =>
+  groups.find((group) => group.project.id === projectId)?.project.title ?? projectId;
 
 /** Thread ids in list order; the keyboard navigation track. */
 export function listThreadIds(items: ReadonlyArray<ShellListItem>): string[] {
@@ -86,4 +122,14 @@ export function formatRelativeTime(iso: string, nowIso: string): string {
   if (hours < 24) return `${hours}h`;
   const days = Math.floor(hours / 24);
   return `${days}d`;
+}
+
+/** Ticking "21s" label of the working pill, compact like the reference. */
+export function formatWorkingElapsed(startedAtIso: string, nowIso: string): string {
+  const seconds = Math.max(0, Math.floor((Date.parse(nowIso) - Date.parse(startedAtIso)) / 1000));
+  if (seconds < 60) return `${seconds}s`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m`;
+  const hours = Math.floor(minutes / 60);
+  return `${hours}h ${minutes % 60}m`;
 }

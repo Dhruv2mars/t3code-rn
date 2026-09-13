@@ -1,9 +1,10 @@
-import { useCallback, useMemo, type JSX } from "react";
+import { useCallback, useEffect, useMemo, type JSX } from "react";
 import { StyleSheet, View } from "react-native";
 
 import { AppText, tokens } from "../components/AppText";
 import { Composer } from "../composer/Composer";
 import type { ModelEntry } from "../composer/modelDisplay";
+import { seedMarkdownFixture } from "../markdown/fixture";
 import { buildStreamListItems } from "./listModel";
 import { MessageStream } from "./MessageStream";
 import { useShellState, useThreadStreamState } from "./stores";
@@ -92,6 +93,12 @@ export function ThreadView(props: {
   const stream = useThreadStreamState(props.session.threadStore);
   const shell = useShellState(props.session.shellStore);
   const items = useMemo(() => buildStreamListItems(stream.thread, stream.notice), [stream]);
+
+  // U-024 dev fixture: renders the markdown showcase thread when the fixture
+  // flag is set at launch and nothing (or the fixture row) is selected.
+  useEffect(() => {
+    seedMarkdownFixture(props.session.threadStore, props.threadId);
+  }, [props.session.threadStore, props.threadId]);
 
   const handleSend = useCallback(
     (text: string) =>
