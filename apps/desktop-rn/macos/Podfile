@@ -12,6 +12,10 @@ target 'T3CodeRN-macOS' do
   platform :macos, '14.0'
   use_native_modules!
 
+  # Local pod: NSTask bridge so the app can spawn the host sidecar
+  # (see apps/desktop-rn/src/sidecar/spawner.ts).
+  pod 'T3SidecarSpawner', :path => './T3SidecarSpawner'
+
   # Flags change depending on the env values.
   flags = get_default_flags()
 
