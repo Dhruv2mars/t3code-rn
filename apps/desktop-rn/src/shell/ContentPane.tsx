@@ -3,6 +3,8 @@ import { StyleSheet, View } from "react-native";
 import type { HandledKeyEvent, KeyEvent } from "react-native/Libraries/Types/CoreEventTypes";
 
 import { AppText, tokens } from "../components/AppText";
+import { ThreadView } from "../thread/ThreadView";
+import type { ThreadSession } from "../thread/session";
 
 const styles = StyleSheet.create({
   breadcrumbProject: {
@@ -61,22 +63,6 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 0,
   },
-  prompt: {
-    color: tokens.foreground,
-    fontSize: 18,
-    fontWeight: "600",
-  },
-  promptNote: {
-    color: tokens.foregroundMuted,
-    fontSize: 14,
-    marginTop: 8,
-  },
-  promptWrap: {
-    alignItems: "center",
-    flex: 1,
-    justifyContent: "center",
-    paddingHorizontal: 32,
-  },
 });
 
 export const KEYBOARD_EVENTS: HandledKeyEvent[] = [
@@ -86,14 +72,17 @@ export const KEYBOARD_EVENTS: HandledKeyEvent[] = [
 ];
 
 /**
- * Main content pane: breadcrumb, empty-state prompt, and a footer that proves
- * the keyboard selection state on screen (acceptance 3).
+ * Main content pane: breadcrumb over the live thread view (stream +
+ * composer), with the U-008 keyboard-selection footer kept for evidence.
  */
 export function ContentPane(props: {
   readonly projectTitle: string;
   readonly selectedTitle: string;
   readonly highlightedTitle: string;
+  readonly session: ThreadSession;
+  readonly threadId: string | null;
   readonly onKeyDown: (event: KeyEvent) => void;
+  readonly onThreadCreated: (threadId: string) => void;
 }) {
   return (
     <View style={styles.pane}>
@@ -111,16 +100,21 @@ export function ContentPane(props: {
         focusable
         keyDownEvents={KEYBOARD_EVENTS}
         onKeyDown={props.onKeyDown}
-        style={styles.promptWrap}
+        style={styles.pane}
       >
-        <AppText style={styles.prompt}>{`What should we build in ${props.projectTitle}?`}</AppText>
-        <AppText style={styles.promptNote}>
-          Messages stream here in a later unit. This pane is the U-008 shell scaffold.
-        </AppText>
+        <ThreadView
+          onThreadCreated={props.onThreadCreated}
+          projectTitle={props.projectTitle}
+          session={props.session}
+          threadId={props.threadId}
+        />
       </View>
       <View style={styles.footer}>
+        <AppText numberOfLines={1} style={styles.footerHint}>
+          Up/Down move, Enter selects
+        </AppText>
         <AppText numberOfLines={1} style={styles.footerState}>
-          {`Up/Down move, Enter selects · highlight: ${props.highlightedTitle} · selected: ${props.selectedTitle}`}
+          {`highlight: ${props.highlightedTitle} · selected: ${props.selectedTitle}`}
         </AppText>
       </View>
     </View>
