@@ -1,3 +1,4 @@
+// @effect-diagnostics nodeBuiltinImport:off
 import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
@@ -55,7 +56,11 @@ describe("readPathFromLoginShell", () => {
     expect(execFile).toHaveBeenCalledTimes(1);
 
     const firstCall = execFile.mock.calls[0] as
-      | [string, ReadonlyArray<string>, { encoding: "utf8"; timeout: number }]
+      | [
+          string,
+          ReadonlyArray<string>,
+          { encoding: "utf8"; timeout: number; stdio?: ["pipe", "pipe", "pipe"] },
+        ]
       | undefined;
     expect(firstCall).toBeDefined();
     if (!firstCall) {
@@ -69,7 +74,7 @@ describe("readPathFromLoginShell", () => {
     expect(args?.[1]).toContain("printenv PATH || true");
     expect(args?.[1]).toContain("__T3CODE_ENV_PATH_START__");
     expect(args?.[1]).toContain("__T3CODE_ENV_PATH_END__");
-    expect(options).toEqual({ encoding: "utf8", timeout: 5000 });
+    expect(options).toEqual({ encoding: "utf8", timeout: 5000, stdio: ["pipe", "pipe", "pipe"] });
   });
 });
 
