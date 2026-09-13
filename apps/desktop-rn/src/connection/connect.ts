@@ -1,6 +1,6 @@
 import {
   bootstrapRemoteBearerSession,
-  resolveRemoteWebSocketConnectionUrl,
+  issueRemoteWebSocketTicket,
 } from "@t3tools/client-runtime/authorization";
 import { WS_METHODS, WsRpcGroup } from "@t3tools/contracts";
 import * as Data from "effect/Data";
@@ -266,8 +266,7 @@ export const runConnectionPipeline = (
     input.onEvent({ tag: "bearerSession", expiresIn: session.expires_in });
 
     input.onEvent({ tag: "stage", stage: "ticket" });
-    const wsUrl = yield* resolveRemoteWebSocketConnectionUrl({
-      wsBaseUrl,
+    const issued = yield* issueRemoteWebSocketTicket({
       httpBaseUrl,
       bearerToken: session.access_token,
     }).pipe(
@@ -280,6 +279,15 @@ export const runConnectionPipeline = (
       ),
     );
     input.onEvent({ tag: "wsTicket" });
+
+    // The server upgrades /ws only. resolveRemoteWebSocketConnectionUrl builds
+    // the URL through `new URL`, and RN's URL polyfill parses only http(s)
+    // URLs: for ws:// its pathname getter reports "/" and the "/ws" rewrite
+    // cannot take effect, so the URL serializes as ws://host:port/?wsTicket=...
+    // and the upgrade fails at Open. wsBaseUrl is `ws://127.0.0.1:<port>` with
+    // no path or query, and the ticket is base64url, so plain concatenation is
+    // exact.
+    const wsUrl = `${wsBaseUrl}/ws?wsTicket=${encodeURIComponent(issued.ticket)}`;
 
     input.onEvent({ tag: "stage", stage: "ws" });
     input.onEvent({ tag: "stage", stage: "rpc" });
