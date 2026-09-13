@@ -9,7 +9,7 @@
   "scripts": {
     "build": "node scripts/build.mjs",
     "typecheck": "tsc --noEmit",
-    "test": "vp test run"
+    "test": "pnpm run build && vp test run"
   },
   "dependencies": {
     "@effect/platform-node": "catalog:",
