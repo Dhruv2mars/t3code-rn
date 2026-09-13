@@ -2227,6 +2227,8 @@ PODS:
     - React-utils (= 0.81.9)
     - SocketRocket
   - SocketRocket (0.7.1)
+  - T3SidecarSpawner (0.1.0):
+    - React-Core
   - Yoga (0.0.0)
 
 DEPENDENCIES:
@@ -2302,6 +2304,7 @@ DEPENDENCIES:
   - ReactCodegen (from `build/generated/ios`)
   - ReactCommon/turbomodule/core (from `../node_modules/react-native-macos/ReactCommon`)
   - SocketRocket (~> 0.7.1)
+  - T3SidecarSpawner (from `./T3SidecarSpawner`)
   - Yoga (from `../node_modules/react-native-macos/ReactCommon/yoga`)
 
 SPEC REPOS:
@@ -2450,6 +2453,8 @@ EXTERNAL SOURCES:
     :path: build/generated/ios
   ReactCommon:
     :path: "../node_modules/react-native-macos/ReactCommon"
+  T3SidecarSpawner:
+    :path: "./T3SidecarSpawner"
   Yoga:
     :path: "../node_modules/react-native-macos/ReactCommon/yoga"
 
@@ -2525,8 +2530,9 @@ SPEC CHECKSUMS:
   ReactCodegen: 6a4b9d14b4fbc94afba2c2b817cdd54725ae030c
   ReactCommon: bc273d1cfc32a36ea662e81293e0961de8c21c77
   SocketRocket: d4aabe649be1e368d1318fdf28a022d714d65748
+  T3SidecarSpawner: 038f9ecbe4c091e1cfee18a33c5a8743f75bc1a6
   Yoga: a88f30ac6f89fded00f9840e7d043315e5ab4fe0
 
-PODFILE CHECKSUM: eff48338ace3f6d3c5964bc0d9c147c63bbb8af8
+PODFILE CHECKSUM: 9676248ea384d14ecb82cc9e46b933aba863b25c
 
 COCOAPODS: 1.16.2
