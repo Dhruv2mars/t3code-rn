@@ -99,6 +99,8 @@ export function DesktopShell({
   const handleKeyDown = useCallback(
     (event: KeyEvent) => {
       const key = event.nativeEvent.key;
+      // [u020 instrumentation] proves whether ANY key event reaches JS.
+      devLog(`[u020] root keyDown ${key}`);
       if (key === "ArrowUp" || key === "ArrowDown") {
         const next = stepThreadId(threadIds, highlightedId, key === "ArrowDown" ? 1 : -1);
         if (next !== null && next !== highlightedId) {
@@ -128,7 +130,14 @@ export function DesktopShell({
   const selectedProject = selectedThread ? projectById.get(selectedThread.projectId) : undefined;
 
   return (
-    <View focusable keyDownEvents={KEYBOARD_EVENTS} onKeyDown={handleKeyDown} style={styles.root}>
+    <View
+      focusable
+      keyDownEvents={KEYBOARD_EVENTS}
+      onBlur={() => devLog("[u020] root lost first responder")}
+      onFocus={() => devLog("[u020] root became first responder")}
+      onKeyDown={handleKeyDown}
+      style={styles.root}
+    >
       <Sidebar
         highlightedId={highlightedId}
         items={items}
