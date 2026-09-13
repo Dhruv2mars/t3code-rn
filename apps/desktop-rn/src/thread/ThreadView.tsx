@@ -2,11 +2,12 @@ import { useCallback, useEffect, useMemo, type JSX } from "react";
 import { StyleSheet, View } from "react-native";
 
 import { AppText, tokens } from "../components/AppText";
+import { Composer } from "../composer/Composer";
+import type { ModelEntry } from "../composer/modelDisplay";
 import { seedMarkdownFixture } from "../markdown/fixture";
 import { buildStreamListItems } from "./listModel";
-import { Composer } from "./Composer";
 import { MessageStream } from "./MessageStream";
-import { useThreadStreamState, type ThreadStreamState } from "./stores";
+import { useShellState, useThreadStreamState } from "./stores";
 import type { ThreadSession } from "./session";
 
 const styles = StyleSheet.create({
@@ -45,12 +46,38 @@ const styles = StyleSheet.create({
   },
 });
 
-const composerLabels = (state: ThreadStreamState): { model: string; runtime: string } => ({
-  model: state.thread?.modelSelection.model ?? "Model",
-  runtime: state.thread?.runtimeMode ?? "Full access",
-});
+const COMPOSER_PLACEHOLDER = "Ask anything, @tag files/folders, $use skills, or / for commands";
 
-const COMPOSER_PLACEHOLDER = "Ask for changes, send follow-ups, or attach images";
+/**
+ * Local visual-verification flag for the stop state. The session surface
+ * this unit may read (thread stream state) only exposes per-message
+ * streaming flags, which the server settles before the client sees them,
+ * so a live running turn cannot be derived in scope today. Flip to true to
+ * render the stop state for the parity screenshots; ships false.
+ */
+const MOCK_WORKING = false;
+
+const modelEntryKey = (instanceId: string, model: string): string => `${instanceId}/${model}`;
+
+/** Real model selections seen on this server (current thread first, then the shell history). */
+const collectModelEntries = (
+  current: { instanceId: string; model: string } | null,
+  threads: ReadonlyArray<{ modelSelection: { instanceId: string; model: string } }>,
+): ReadonlyArray<ModelEntry> => {
+  const entries = new Map<string, ModelEntry>();
+  if (current !== null) {
+    entries.set(modelEntryKey(current.instanceId, current.model), {
+      instanceId: current.instanceId,
+      model: current.model,
+    });
+  }
+  for (const thread of threads) {
+    const { instanceId, model } = thread.modelSelection;
+    const key = modelEntryKey(instanceId, model);
+    if (!entries.has(key)) entries.set(key, { instanceId, model });
+  }
+  return [...entries.values()];
+};
 
 /**
  * Main pane for one thread: live message stream plus composer, or the
@@ -64,8 +91,8 @@ export function ThreadView(props: {
   readonly onThreadCreated: (threadId: string) => void;
 }): JSX.Element {
   const stream = useThreadStreamState(props.session.threadStore);
+  const shell = useShellState(props.session.shellStore);
   const items = useMemo(() => buildStreamListItems(stream.thread, stream.notice), [stream]);
-  const labels = composerLabels(stream);
 
   // U-024 dev fixture: renders the markdown showcase thread when the fixture
   // flag is set at launch and nothing (or the fixture row) is selected.
@@ -82,6 +109,18 @@ export function ThreadView(props: {
     [props],
   );
 
+  const composerProps = {
+    availableModels: collectModelEntries(stream.thread?.modelSelection ?? null, shell.threads),
+    interactionMode: stream.thread?.interactionMode ?? null,
+    model: stream.thread?.modelSelection ?? null,
+    onSend: handleSend,
+    placeholder: COMPOSER_PLACEHOLDER,
+    runtimeMode: stream.thread?.runtimeMode ?? null,
+    // The thread event stream carries per-message streaming flags; the
+    // latestTurn snapshot only refreshes on coarser server updates.
+    working: MOCK_WORKING || stream.thread?.latestTurn?.state === "running",
+  };
+
   if (props.threadId === null && stream.thread === null) {
     return (
       <View style={styles.emptyWrap}>
@@ -89,12 +128,7 @@ export function ThreadView(props: {
           <AppText style={styles.emptyPrompt}>
             {`What should we build in ${props.projectTitle}?`}
           </AppText>
-          <Composer
-            modelLabel={labels.model}
-            onSend={handleSend}
-            placeholder={COMPOSER_PLACEHOLDER}
-            runtimeLabel={labels.runtime}
-          />
+          <Composer {...composerProps} />
         </View>
       </View>
     );
@@ -108,12 +142,7 @@ export function ThreadView(props: {
         </View>
       ) : null}
       <MessageStream items={items} />
-      <Composer
-        modelLabel={labels.model}
-        onSend={handleSend}
-        placeholder={COMPOSER_PLACEHOLDER}
-        runtimeLabel={labels.runtime}
-      />
+      <Composer {...composerProps} />
     </View>
   );
 }
