@@ -58,9 +58,24 @@ jobs:
       - name: Setup MSBuild
         uses: microsoft/setup-msbuild@v2
 
+      - name: Select newest installed Windows SDK
+        id: sdk
+        shell: pwsh
+        run: |
+          $kits = "C:\Program Files (x86)\Windows Kits\10\Include"
+          $version = (Get-ChildItem $kits -Directory -Filter "10.*" |
+            Sort-Object { [version]$_.Name } -Descending |
+            Select-Object -First 1).Name
+          if (-not $version) {
+            Write-Error "No Windows SDK found under $kits"
+            exit 1
+          }
+          "version=$version" >> $env:GITHUB_OUTPUT
+          Write-Host "Using Windows SDK $version"
+
       - name: Build solution (Debug x64, unsigned)
         working-directory: apps/desktop-rn/windows
-        run: msbuild T3CodeRN.sln -restore -m -p:Configuration=Debug -p:Platform=x64 -p:AppxPackageSigningEnabled=false
+        run: msbuild T3CodeRN.sln -restore -m -p:Configuration=Debug -p:Platform=x64 -p:AppxPackageSigningEnabled=false -p:WindowsTargetPlatformVersion=${{ steps.sdk.outputs.version }} -p:TargetPlatformVersion=${{ steps.sdk.outputs.version }}
 
       - name: Locate app executable
         id: exe
