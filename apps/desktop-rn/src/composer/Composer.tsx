@@ -239,6 +239,12 @@ export function Composer(props: {
       })),
     [props.availableModels, props.model],
   );
+  // The menu must stay visible when the server has no model history yet;
+  // selecting this row falls through (selectModel ignores empty entries).
+  const resolvedModelItems =
+    modelItems.length > 0
+      ? modelItems
+      : [{ label: "No models seen on this server yet", checked: false }];
 
   const send = useCallback(() => {
     const trimmed = text.trim();
@@ -362,7 +368,7 @@ export function Composer(props: {
         </View>
       </View>
       <PickerMenu
-        items={modelItems}
+        items={resolvedModelItems}
         onClose={() => setOpenMenu(null)}
         onSelect={selectModel}
         visible={openMenu === "model"}
