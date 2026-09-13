@@ -7,7 +7,7 @@ import * as NodeFS from "node:fs";
 import * as NodeOS from "node:os";
 import * as NodePath from "node:path";
 import * as NodeUtil from "node:util";
-import { fileURLToPath } from "node:url";
+import * as NodeURL from "node:url";
 
 import * as NodeHttpClient from "@effect/platform-node/NodeHttpClient";
 import { assert, describe, it } from "@effect/vitest";
@@ -26,7 +26,7 @@ import {
 } from "@t3tools/client-runtime/authorization";
 import { WS_METHODS, WsRpcGroup } from "@t3tools/contracts";
 
-const HOST_ENTRY = fileURLToPath(new URL("../dist/host.cjs", import.meta.url));
+const HOST_ENTRY = NodeURL.fileURLToPath(new URL("../dist/host.cjs", import.meta.url));
 const HANDSHAKE_TIMEOUT = "150 seconds";
 const SESSION_READY_TIMEOUT = "10 seconds";
 
@@ -47,94 +47,126 @@ const isHandshake = (value: unknown): value is HostHandshake =>
   typeof (value as HostHandshake).port === "number" &&
   typeof (value as HostHandshake).token === "string";
 
+const decodeUnknownJson = Schema.decodeSync(Schema.fromJsonString(Schema.Unknown));
+
 const parseJsonLine = (line: string): unknown => {
   try {
-    return Schema.decodeSync(Schema.fromJsonString(Schema.Unknown))(line);
+    return decodeUnknownJson(line);
   } catch {
     return null;
   }
 };
 
-const spawnHost = Effect.gen(function* () {
-  const baseDir = yield* Effect.sync(() =>
-    NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-rn-host-smoke-")),
-  );
-  const env: NodeJS.ProcessEnv = {};
-  for (const [key, value] of Object.entries(process.env)) {
-    if (key.startsWith("T3CODE_")) continue;
-    if (value !== undefined) env[key] = value;
-  }
-  env.T3CODE_HOME = baseDir;
+// CI spawns the sidecar without a controlling terminal, so the login-shell
+// PATH probe in the server's boot (fixPath -> `bash -ilc`) prints bash
+// job-control noise on the inherited stderr before the handshake. These
+// lines are benign; any other pre-handshake stderr still fails the smoke.
+const BENIGN_STDERR_LINES: ReadonlyArray<RegExp> = [
+  /^bash: cannot set terminal process group \(\d+\): Inappropriate ioctl for device$/,
+  /^bash: no job control in this shell$/,
+];
 
-  const child = yield* Effect.sync(() =>
-    NodeChildProcess.spawn(process.execPath, [HOST_ENTRY], {
-      env,
-      cwd: NodeOS.tmpdir(),
-      stdio: ["ignore", "pipe", "pipe"],
-    }),
-  );
+const nonBenignStderrLines = (stderr: string): ReadonlyArray<string> =>
+  stderr
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0)
+    .filter((line) => !BENIGN_STDERR_LINES.some((pattern) => pattern.test(line)));
 
-  const handshake = Effect.callback<HostHandshake, HostSmokeError>((resume) => {
-    let buffer = "";
-    const onData = (chunk: Buffer | string) => {
-      buffer += chunk.toString("utf8");
-      let newlineIndex = buffer.indexOf("\n");
-      while (newlineIndex !== -1) {
-        const line = buffer.slice(0, newlineIndex).trim();
-        buffer = buffer.slice(newlineIndex + 1);
-        const parsed = parseJsonLine(line);
-        if (isHandshake(parsed)) {
-          cleanup();
-          resume(Effect.succeed(parsed));
-          return;
+interface SpawnSpec {
+  readonly command: string;
+  readonly args: ReadonlyArray<string>;
+}
+
+const spawnHostProcess = (spec: SpawnSpec) =>
+  Effect.gen(function* () {
+    const baseDir = yield* Effect.sync(() =>
+      NodeFS.mkdtempSync(NodePath.join(NodeOS.tmpdir(), "t3-rn-host-smoke-")),
+    );
+    const env: NodeJS.ProcessEnv = {};
+    for (const [key, value] of Object.entries(process.env)) {
+      if (key.startsWith("T3CODE_")) continue;
+      if (value !== undefined) env[key] = value;
+    }
+    env.T3CODE_HOME = baseDir;
+
+    const child = yield* Effect.sync(() =>
+      NodeChildProcess.spawn(spec.command, [...spec.args], {
+        env,
+        cwd: NodeOS.tmpdir(),
+        stdio: ["ignore", "pipe", "pipe"],
+      }),
+    );
+
+    const handshake = Effect.callback<HostHandshake, HostSmokeError>((resume) => {
+      let buffer = "";
+      let stderrBuffer = "";
+      const onData = (chunk: Buffer | string) => {
+        buffer += chunk.toString("utf8");
+        let newlineIndex = buffer.indexOf("\n");
+        while (newlineIndex !== -1) {
+          const line = buffer.slice(0, newlineIndex).trim();
+          buffer = buffer.slice(newlineIndex + 1);
+          const parsed = parseJsonLine(line);
+          if (isHandshake(parsed)) {
+            cleanup();
+            resume(Effect.succeed(parsed));
+            return;
+          }
+          newlineIndex = buffer.indexOf("\n");
         }
-        newlineIndex = buffer.indexOf("\n");
-      }
-    };
-    const onStderr = (chunk: Buffer | string) => {
-      cleanup();
-      resume(
-        Effect.fail(
-          new HostSmokeError({
-            message: `t3-rn-host wrote to stderr before the handshake: ${String(chunk)}`,
-          }),
-        ),
-      );
-    };
-    const onExit = (code: number | null, signal: string | null) => {
-      cleanup();
-      resume(
-        Effect.fail(
-          new HostSmokeError({
-            message: `t3-rn-host exited before the handshake (code=${code} signal=${signal})`,
-          }),
-        ),
-      );
-    };
-    const cleanup = () => {
-      child.stdout?.off("data", onData);
-      child.stderr?.off("data", onStderr);
-      child.off("exit", onExit);
-    };
-    child.stdout?.on("data", onData);
-    child.stderr?.on("data", onStderr);
-    child.on("exit", onExit);
-    return Effect.sync(cleanup);
-  }).pipe(Effect.timeout(HANDSHAKE_TIMEOUT));
+      };
+      const onStderr = (chunk: Buffer | string) => {
+        stderrBuffer += String(chunk);
+        // Only judge complete lines so a benign line split across chunks
+        // cannot masquerade as a real error.
+        const lastNewline = stderrBuffer.lastIndexOf("\n");
+        if (lastNewline === -1) return;
+        const residue = nonBenignStderrLines(stderrBuffer.slice(0, lastNewline + 1));
+        if (residue.length === 0) return;
+        cleanup();
+        resume(
+          Effect.fail(
+            new HostSmokeError({
+              message: `t3-rn-host wrote to stderr before the handshake: ${residue.join("\n")}`,
+            }),
+          ),
+        );
+      };
+      const onExit = (code: number | null, signal: string | null) => {
+        cleanup();
+        resume(
+          Effect.fail(
+            new HostSmokeError({
+              message: `t3-rn-host exited before the handshake (code=${code} signal=${signal})`,
+            }),
+          ),
+        );
+      };
+      const cleanup = () => {
+        child.stdout?.off("data", onData);
+        child.stderr?.off("data", onStderr);
+        child.off("exit", onExit);
+      };
+      child.stdout?.on("data", onData);
+      child.stderr?.on("data", onStderr);
+      child.on("exit", onExit);
+      return Effect.sync(cleanup);
+    }).pipe(Effect.timeout(HANDSHAKE_TIMEOUT));
 
-  const exit = (signal: NodeJS.Signals) =>
-    Effect.callback<{ code: number | null; signal: string | null }, HostSmokeError>((resume) => {
-      child.once("exit", (code, exitSignal) =>
-        resume(Effect.succeed({ code, signal: exitSignal })),
-      );
-      child.kill(signal);
-      return Effect.sync(() => {
-        child.off("exit", resume);
-      });
-    }).pipe(Effect.timeout("15 seconds"));
+    const exit = (signal: NodeJS.Signals) =>
+      Effect.callback<{ code: number | null; signal: string | null }, HostSmokeError>((resume) => {
+        child.once("exit", (code, exitSignal) =>
+          resume(Effect.succeed({ code, signal: exitSignal })),
+        );
+        child.kill(signal);
+        return Effect.sync(() => {
+          child.off("exit", resume);
+        });
+      }).pipe(Effect.timeout("15 seconds"));
 
-  return { child, handshake, exit };
-});
+    return { child, handshake, exit };
+  });
 
 // The exact protocol stack client-runtime/src/rpc/session.ts builds: a
 // WebSocket socket layer, JSON RPC serialization, and the socket protocol
@@ -174,7 +206,10 @@ const subscribeServerConfigSnapshot = (socketUrl: string) => {
 describe("t3-rn-host", () => {
   it.effect("serves 127.0.0.1, mints a bootstrap token, and completes a real WS RPC session", () =>
     Effect.gen(function* () {
-      const host = yield* spawnHost;
+      const host = yield* spawnHostProcess({
+        command: process.execPath,
+        args: [HOST_ENTRY],
+      });
 
       const handshake = yield* host.handshake;
       assert.equal(
@@ -275,5 +310,27 @@ describe("t3-rn-host", () => {
         `exit after SIGTERM: ${NodeUtil.inspect(exited)}`,
       );
     }).pipe(Effect.provide(NodeHttpClient.layerUndici)),
+  );
+
+  it.effect("still fails on real pre-handshake stderr from a bogus sidecar", () =>
+    Effect.gen(function* () {
+      const host = yield* spawnHostProcess({
+        command: process.execPath,
+        args: [
+          "-e",
+          `process.stderr.write("boom: fake boot failure\\n"); setTimeout(() => {}, 60000);`,
+        ],
+      });
+      const error = yield* Effect.flip(host.handshake);
+      assert.equal(
+        error._tag,
+        "HostSmokeError",
+        `expected HostSmokeError, got: ${NodeUtil.inspect(error)}`,
+      );
+      assert.match(error.message, /boom: fake boot failure/, `error message: ${error.message}`);
+      yield* Effect.sync(() => {
+        host.child.kill("SIGKILL");
+      });
+    }),
   );
 });

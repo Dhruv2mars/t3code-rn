@@ -34,6 +34,8 @@ export const HostHandshakeSchema = Schema.Struct({
   token: Schema.String,
 });
 
+const encodeHostHandshake = Schema.encodeEffect(Schema.fromJsonString(HostHandshakeSchema));
+
 class HostReadinessError extends Schema.TaggedError<HostReadinessError>()("HostReadinessError", {
   detail: Schema.String,
 }) {
@@ -98,9 +100,7 @@ const program = Effect.gen(function* () {
   });
 
   const handshake: HostHandshake = { pid: process.pid, port, token };
-  const handshakeLine = yield* Schema.encodeEffect(Schema.fromJsonString(HostHandshakeSchema))(
-    handshake,
-  );
+  const handshakeLine = yield* encodeHostHandshake(handshake);
   yield* Effect.sync(() => {
     process.stdout.write(`${handshakeLine}\n`);
   });
