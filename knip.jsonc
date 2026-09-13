@@ -54,6 +54,14 @@
       // imports it, so knip cannot see the usage.
       "ignoreDependencies": ["@babel/runtime"],
     },
+    "apps/desktop-rn-host": {
+      // src/host.ts is the esbuild entry point, never imported by source.
+      "entry": ["src/host.ts!"],
+      // Native addons stay external in the esbuild bundle so dist/host.cjs
+      // resolves them from this package's node_modules; `t3` is imported only
+      // through `t3/src/*` subpaths knip does not map to the dependency.
+      "ignoreDependencies": ["ffi-rs", "msgpackr-extract", "node-pty", "t3"],
+    },
     "apps/web": {
       // Worktree setup invokes this directly from t3.json.
       "entry": ["scripts/warm-dep-cache.ts"],
