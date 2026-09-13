@@ -10,7 +10,6 @@ import {
   effortLabel,
   effortOf,
   interactionModeLabel,
-  modelDisplayName,
   modelEntryLabel,
   runtimeModeLabel,
   type EffortOption,
@@ -18,17 +17,17 @@ import {
 } from "./modelDisplay";
 import { PickerMenu } from "./PickerMenu";
 
-/** Colors sampled from reference/composer.png (see PR color table). */
+/** Colors sampled from the live T3 Code desktop capture (see PR color table). */
 const colors = {
   card: "#0f0f0f",
   cardBorder: "#1b1b1b",
-  pill: "#212121",
-  pillText: "#f5f5f5",
-  placeholder: "#616161",
+  placeholder: "#6a6a6a",
   inputText: "#f5f5f5",
-  rowLabel: "#8f8f96",
+  rowLabel: "#9a9aa2",
   icon: "#9a9aa2",
-  stopRed: "#e33a42",
+  separator: "#26262a",
+  providerIconBg: "#232327",
+  stopRed: "#e23942",
   accent: "#6366f1",
   sendDimmed: "rgba(255, 255, 255, 0.10)",
   glyphDimmed: "#6f6f76",
@@ -40,77 +39,99 @@ const styles = StyleSheet.create({
     alignSelf: "center",
     marginBottom: 12,
     paddingHorizontal: 16,
+    position: "relative",
     width: "100%",
   },
   card: {
     backgroundColor: colors.card,
     borderColor: colors.cardBorder,
-    borderRadius: 14,
+    borderRadius: 16,
     borderWidth: 1,
-    maxWidth: 768,
-    paddingBottom: 10,
-    paddingHorizontal: 22,
-    paddingTop: 16,
+    maxWidth: 480,
+    paddingBottom: 9,
+    paddingHorizontal: 20,
+    paddingTop: 12,
     width: "100%",
   },
   input: {
     color: colors.inputText,
-    fontSize: 15,
-    minHeight: 44,
+    fontSize: 14,
+    minHeight: 46,
     padding: 0,
     textAlignVertical: "top",
-  },
-  modelPillWrap: {
-    alignItems: "center",
-    marginTop: 2,
-  },
-  modelPill: {
-    alignItems: "center",
-    backgroundColor: colors.pill,
-    borderRadius: 12,
-    justifyContent: "center",
-    minHeight: 25,
-    paddingHorizontal: 14,
-  },
-  modelPillTail: {
-    backgroundColor: colors.pill,
-    height: 9,
-    marginTop: -4,
-    transform: [{ rotate: "45deg" }],
-    width: 9,
-  },
-  modelPillLabel: {
-    color: colors.pillText,
-    fontSize: 13,
-    fontWeight: "500",
   },
   toolbar: {
     alignItems: "center",
     flexDirection: "row",
-    marginTop: 8,
+    marginTop: 4,
   },
   leftCluster: {
     alignItems: "center",
     flex: 1,
     flexDirection: "row",
-    gap: 2,
   },
   chip: {
     alignItems: "center",
     borderRadius: 7,
     flexDirection: "row",
-    minHeight: 28,
-    paddingHorizontal: 8,
+    minHeight: 30,
+    paddingHorizontal: 7,
+  },
+  chipFirst: {
+    marginLeft: -7,
   },
   chipLabel: {
     color: colors.rowLabel,
-    fontSize: 12.5,
+    fontSize: 13,
   },
   chipChevron: {
     color: colors.rowLabel,
-    fontSize: 11,
-    marginLeft: 3,
-    marginTop: 1,
+    fontSize: 10,
+    marginLeft: 4,
+    marginTop: 2,
+  },
+  providerIcon: {
+    alignItems: "center",
+    backgroundColor: colors.providerIconBg,
+    borderRadius: 4,
+    height: 15,
+    justifyContent: "center",
+    marginRight: 6,
+    width: 15,
+  },
+  providerIconGlyph: {
+    color: "#d5d5da",
+    fontSize: 9,
+    fontWeight: "700",
+  },
+  separator: {
+    backgroundColor: colors.separator,
+    height: 16,
+    marginHorizontal: 5,
+    width: 1,
+  },
+  lockBody: {
+    borderColor: colors.icon,
+    borderRadius: 2,
+    borderWidth: 1.4,
+    height: 7,
+    marginTop: 6,
+    width: 10,
+  },
+  lockShackle: {
+    borderColor: colors.icon,
+    borderRadius: 4,
+    borderWidth: 1.4,
+    height: 8,
+    marginLeft: 1,
+    position: "absolute",
+    top: 0,
+    width: 8,
+  },
+  lockWrap: {
+    height: 14,
+    marginRight: 6,
+    width: 12,
   },
   rightCluster: {
     alignItems: "center",
@@ -167,12 +188,19 @@ const PaperclipIcon = (): JSX.Element => (
   </View>
 );
 
+const LockIcon = (): JSX.Element => (
+  <View style={styles.lockWrap}>
+    <View style={styles.lockShackle} />
+    <View style={styles.lockBody} />
+  </View>
+);
+
 type OpenMenu = "model" | "effort" | "runtime" | null;
 
 /**
- * The T3 Code composer card: multiline prompt, floating model pill, and the
- * bottom row (effort + runtime pickers left, attach and send/stop right).
- * Send behavior lives in the onSend callback provided by the thread view.
+ * The T3 Code composer card: multiline prompt over the picker row (model,
+ * effort, runtime left; attach and send/stop right). Send behavior lives in
+ * the onSend callback provided by the thread view.
  */
 export function Composer(props: {
   readonly placeholder: string;
@@ -195,9 +223,8 @@ export function Composer(props: {
   const [openMenu, setOpenMenu] = useState<OpenMenu>(null);
 
   const interaction = props.interactionMode ?? "default";
-
   const modelLabel = props.model
-    ? modelDisplayName(props.model.instanceId, props.model.model)
+    ? modelEntryLabel({ instanceId: props.model.instanceId, model: props.model.model })
     : "Model";
   const effortChipLabel = `${effortLabel(effort)} · ${interactionModeLabel(interaction)}`;
 
@@ -269,31 +296,56 @@ export function Composer(props: {
           style={styles.input}
           value={text}
         />
-        <View style={styles.modelPillWrap}>
-          <Pressable onPress={() => setOpenMenu("model")} style={styles.modelPill}>
-            <AppText style={styles.modelPillLabel}>{modelLabel}</AppText>
-          </Pressable>
-          <View style={styles.modelPillTail} />
-        </View>
         <View style={styles.toolbar}>
           <View style={styles.leftCluster}>
-            <Pressable onPress={() => setOpenMenu("effort")} style={styles.chip}>
+            <Pressable
+              accessibilityLabel="Model picker"
+              accessibilityRole="button"
+              onPress={() => setOpenMenu("model")}
+              style={[styles.chip, styles.chipFirst]}
+            >
+              <View style={styles.providerIcon}>
+                <AppText style={styles.providerIconGlyph}>
+                  {modelLabel.charAt(0).toUpperCase()}
+                </AppText>
+              </View>
+              <AppText style={styles.chipLabel}>{modelLabel}</AppText>
+              <AppText style={styles.chipChevron}>{"⌄"}</AppText>
+            </Pressable>
+            <View style={styles.separator} />
+            <Pressable
+              accessibilityLabel="Effort picker"
+              accessibilityRole="button"
+              onPress={() => setOpenMenu("effort")}
+              style={styles.chip}
+            >
               <AppText style={styles.chipLabel}>{effortChipLabel}</AppText>
               <AppText style={styles.chipChevron}>{"⌄"}</AppText>
             </Pressable>
-            <Pressable onPress={() => setOpenMenu("runtime")} style={styles.chip}>
+            <View style={styles.separator} />
+            <Pressable
+              accessibilityLabel="Runtime mode picker"
+              accessibilityRole="button"
+              onPress={() => setOpenMenu("runtime")}
+              style={styles.chip}
+            >
+              <LockIcon />
               <AppText style={styles.chipLabel}>{runtimeModeLabel(runtimeMode)}</AppText>
               <AppText style={styles.chipChevron}>{"⌄"}</AppText>
             </Pressable>
           </View>
           <View style={styles.rightCluster}>
             <Pressable
+              accessibilityLabel="Attach files"
+              accessibilityRole="button"
               onPress={() => devLog("[u023] attach: file picking lands with the upload unit")}
               style={styles.attachButton}
             >
               <PaperclipIcon />
             </Pressable>
             <Pressable
+              accessibilityLabel={props.working ? "Stop" : "Send"}
+              accessibilityRole="button"
               disabled={!canSend}
               onPress={props.working ? undefined : send}
               style={[styles.actionButton, { backgroundColor: actionBackground }]}
@@ -310,14 +362,12 @@ export function Composer(props: {
         </View>
       </View>
       <PickerMenu
-        anchor="center"
         items={modelItems}
         onClose={() => setOpenMenu(null)}
         onSelect={selectModel}
         visible={openMenu === "model"}
       />
       <PickerMenu
-        anchor="left"
         items={EFFORT_OPTIONS.map((option) => ({
           label: `${effortLabel(option)} · ${interactionModeLabel(interaction)}`,
           checked: option === effort,
@@ -327,7 +377,6 @@ export function Composer(props: {
         visible={openMenu === "effort"}
       />
       <PickerMenu
-        anchor="left"
         items={RUNTIME_MODE_OPTIONS.map((option) => ({
           label: option.label,
           checked: option.value === runtimeMode,

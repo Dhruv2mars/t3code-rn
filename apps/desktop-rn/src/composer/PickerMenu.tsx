@@ -1,5 +1,5 @@
 import { type JSX } from "react";
-import { Modal, Pressable, StyleSheet, View } from "react-native";
+import { Pressable, StyleSheet, View } from "react-native";
 
 import { AppText } from "../components/AppText";
 
@@ -9,32 +9,34 @@ const colors = {
   border: "#2a2a2e",
   label: "#e5e5e7",
   check: "#8f8f96",
-  backdrop: "transparent",
 } as const;
 
 const styles = StyleSheet.create({
-  backdrop: {
-    flex: 1,
+  dismiss: {
+    bottom: 0,
+    left: 0,
+    position: "absolute",
+    right: 0,
+    top: 0,
   },
   menu: {
     backgroundColor: colors.surface,
     borderColor: colors.border,
     borderRadius: 10,
     borderWidth: 1,
+    bottom: 108,
     elevation: 8,
-    overflow: "hidden",
+    left: 16,
+    maxWidth: 448,
+    minWidth: 200,
     paddingVertical: 5,
     position: "absolute",
+    right: 16,
     shadowColor: "#000000",
     shadowOffset: { height: 6, width: 0 },
     shadowOpacity: 0.4,
     shadowRadius: 14,
-  },
-  menuCentered: {
-    alignSelf: "center",
-  },
-  menuLeft: {
-    marginLeft: 28,
+    zIndex: 20,
   },
   item: {
     alignItems: "center",
@@ -55,34 +57,28 @@ const styles = StyleSheet.create({
 });
 
 /**
- * Menu-lite picker overlay: a small floating list anchored above the
- * composer (centered for the model pill, left for the row pickers).
+ * Menu-lite picker overlay: a small floating list rendered just above the
+ * composer card (the brief's "simple positioned View" — RN macOS Modal is
+ * not available here).
  */
 export function PickerMenu(props: {
   readonly visible: boolean;
-  readonly anchor: "center" | "left";
   readonly items: ReadonlyArray<{ readonly label: string; readonly checked: boolean }>;
   readonly onSelect: (index: number) => void;
   readonly onClose: () => void;
-}): JSX.Element {
+}): JSX.Element | null {
+  if (!props.visible) return null;
   return (
-    <Modal animationType="none" onRequestClose={props.onClose} transparent visible={props.visible}>
-      <Pressable onPress={props.onClose} style={styles.backdrop}>
-        <View
-          style={[
-            styles.menu,
-            props.anchor === "center" ? styles.menuCentered : styles.menuLeft,
-            { bottom: 96 },
-          ]}
-        >
-          {props.items.map((item, index) => (
-            <Pressable key={item.label} onPress={() => props.onSelect(index)} style={styles.item}>
-              <AppText style={styles.itemCheck}>{item.checked ? "✓" : ""}</AppText>
-              <AppText style={styles.itemLabel}>{item.label}</AppText>
-            </Pressable>
-          ))}
-        </View>
-      </Pressable>
-    </Modal>
+    <>
+      <Pressable onPress={props.onClose} style={styles.dismiss} />
+      <View style={styles.menu}>
+        {props.items.map((item, index) => (
+          <Pressable key={item.label} onPress={() => props.onSelect(index)} style={styles.item}>
+            <AppText style={styles.itemCheck}>{item.checked ? "✓" : ""}</AppText>
+            <AppText style={styles.itemLabel}>{item.label}</AppText>
+          </Pressable>
+        ))}
+      </View>
+    </>
   );
 }

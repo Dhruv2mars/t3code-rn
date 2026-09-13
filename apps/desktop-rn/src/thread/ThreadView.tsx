@@ -47,6 +47,15 @@ const styles = StyleSheet.create({
 
 const COMPOSER_PLACEHOLDER = "Ask anything, @tag files/folders, $use skills, or / for commands";
 
+/**
+ * Local visual-verification flag for the stop state. The session surface
+ * this unit may read (thread stream state) only exposes per-message
+ * streaming flags, which the server settles before the client sees them,
+ * so a live running turn cannot be derived in scope today. Flip to true to
+ * render the stop state for the parity screenshots; ships false.
+ */
+const MOCK_WORKING = false;
+
 const modelEntryKey = (instanceId: string, model: string): string => `${instanceId}/${model}`;
 
 /** Real model selections seen on this server (current thread first, then the shell history). */
@@ -100,7 +109,9 @@ export function ThreadView(props: {
     onSend: handleSend,
     placeholder: COMPOSER_PLACEHOLDER,
     runtimeMode: stream.thread?.runtimeMode ?? null,
-    working: stream.thread?.latestTurn?.state === "running",
+    // The thread event stream carries per-message streaming flags; the
+    // latestTurn snapshot only refreshes on coarser server updates.
+    working: MOCK_WORKING || stream.thread?.latestTurn?.state === "running",
   };
 
   if (props.threadId === null && stream.thread === null) {
