@@ -1,4 +1,12 @@
-import { useCallback, useMemo, useRef, useState, type JSX } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ComponentRef,
+  type JSX,
+} from "react";
 import { PanResponder, StyleSheet, View } from "react-native";
 import type { KeyEvent } from "react-native/Libraries/Types/CoreEventTypes";
 
@@ -61,6 +69,13 @@ export function DesktopShell({
 }): JSX.Element {
   const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_DEFAULT_WIDTH);
   const [query, setQuery] = useState("");
+  // On macOS the window never hands keyboard focus to a React view on its
+  // own (no view is first responder until something claims it), so the shell
+  // root claims first responder on mount; keyDownEvents route from there.
+  const rootRef = useRef<ComponentRef<typeof View> | null>(null);
+  useEffect(() => {
+    rootRef.current?.focus();
+  }, []);
   const [items, threadIds] = useMemo(() => {
     const nextItems = buildShellListItems(
       groupThreadsByProject(FIXTURE_PROJECTS, FIXTURE_THREADS),
@@ -128,7 +143,13 @@ export function DesktopShell({
   const selectedProject = selectedThread ? projectById.get(selectedThread.projectId) : undefined;
 
   return (
-    <View focusable keyDownEvents={KEYBOARD_EVENTS} onKeyDown={handleKeyDown} style={styles.root}>
+    <View
+      ref={rootRef}
+      focusable
+      keyDownEvents={KEYBOARD_EVENTS}
+      onKeyDown={handleKeyDown}
+      style={styles.root}
+    >
       <Sidebar
         highlightedId={highlightedId}
         items={items}
