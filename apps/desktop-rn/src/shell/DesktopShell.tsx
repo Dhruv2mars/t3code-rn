@@ -1,4 +1,12 @@
-import { useCallback, useMemo, useRef, useState, type JSX } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ComponentRef,
+  type JSX,
+} from "react";
 import { PanResponder, StyleSheet, View } from "react-native";
 import type { KeyEvent } from "react-native/Libraries/Types/CoreEventTypes";
 
@@ -61,6 +69,13 @@ export function DesktopShell({
 }): JSX.Element {
   const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_DEFAULT_WIDTH);
   const [query, setQuery] = useState("");
+  // On macOS the window never hands keyboard focus to a React view on its
+  // own (no view is first responder until something claims it), so the shell
+  // root claims first responder on mount; keyDownEvents route from there.
+  const rootRef = useRef<ComponentRef<typeof View> | null>(null);
+  useEffect(() => {
+    rootRef.current?.focus();
+  }, []);
   const [items, threadIds] = useMemo(() => {
     const nextItems = buildShellListItems(
       groupThreadsByProject(FIXTURE_PROJECTS, FIXTURE_THREADS),
@@ -99,8 +114,6 @@ export function DesktopShell({
   const handleKeyDown = useCallback(
     (event: KeyEvent) => {
       const key = event.nativeEvent.key;
-      // [u020 instrumentation] proves whether ANY key event reaches JS.
-      devLog(`[u020] root keyDown ${key}`);
       if (key === "ArrowUp" || key === "ArrowDown") {
         const next = stepThreadId(threadIds, highlightedId, key === "ArrowDown" ? 1 : -1);
         if (next !== null && next !== highlightedId) {
@@ -131,10 +144,9 @@ export function DesktopShell({
 
   return (
     <View
+      ref={rootRef}
       focusable
       keyDownEvents={KEYBOARD_EVENTS}
-      onBlur={() => devLog("[u020] root lost first responder")}
-      onFocus={() => devLog("[u020] root became first responder")}
       onKeyDown={handleKeyDown}
       style={styles.root}
     >
