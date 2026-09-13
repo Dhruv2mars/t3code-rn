@@ -55,7 +55,7 @@ const isHandshake = (value: unknown): value is HostHandshake =>
   typeof (value as HostHandshake).port === "number" &&
   typeof (value as HostHandshake).token === "string";
 
-const describeCause = (cause: unknown): string => {
+export const describeCause = (cause: unknown): string => {
   if (
     typeof cause === "object" &&
     cause !== null &&
@@ -141,7 +141,7 @@ const firstServerConfigSnapshot = (
   );
 };
 
-const snapshotOf = (event: unknown): EnvironmentSnapshot => {
+export const snapshotOf = (event: unknown): EnvironmentSnapshot => {
   if (
     typeof event !== "object" ||
     event === null ||
@@ -225,9 +225,19 @@ export interface ConnectPipelineInput {
   readonly onEvent: (event: ConnectEvent) => void;
 }
 
-export const runConnectionPipeline = (
+export interface SidecarTransport {
+  readonly sidecar: RunningSidecar;
+  readonly wsUrl: string;
+}
+
+/**
+ * Spawns the sidecar and walks every stage up to a ready WebSocket URL.
+ * Consumers decide how to use it: a one-shot config probe (the U-007
+ * pipeline) or a long-lived RPC session (the thread view).
+ */
+export const connectTransport = (
   input: ConnectPipelineInput,
-): Effect.Effect<EnvironmentSnapshot, ConnectFailure> =>
+): Effect.Effect<SidecarTransport, ConnectFailure> =>
   Effect.gen(function* () {
     input.onEvent({ tag: "stage", stage: "spawn" });
     const sidecar = yield* Effect.tryPromise({
@@ -290,6 +300,14 @@ export const runConnectionPipeline = (
     const wsUrl = `${wsBaseUrl}/ws?wsTicket=${encodeURIComponent(issued.ticket)}`;
 
     input.onEvent({ tag: "stage", stage: "ws" });
-    input.onEvent({ tag: "stage", stage: "rpc" });
-    return yield* Effect.scoped(firstServerConfigSnapshot(wsUrl, input.onEvent));
+    return { sidecar, wsUrl };
   }).pipe(Effect.provide(remoteHttpClientLayer(globalThis.fetch)));
+
+export const runConnectionPipeline = (
+  input: ConnectPipelineInput,
+): Effect.Effect<EnvironmentSnapshot, ConnectFailure> =>
+  Effect.gen(function* () {
+    const transport = yield* connectTransport(input);
+    input.onEvent({ tag: "stage", stage: "rpc" });
+    return yield* Effect.scoped(firstServerConfigSnapshot(transport.wsUrl, input.onEvent));
+  });
