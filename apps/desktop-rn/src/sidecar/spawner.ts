@@ -72,8 +72,8 @@ export async function spawnSidecar(
     for (const listener of lineListeners) listener(line);
   });
   const subscriptions = [
-    sidecarEmitter.addListener("sidecarStdout", stdout.push),
-    sidecarEmitter.addListener("sidecarStderr", stderr.push),
+    sidecarEmitter.addListener("sidecarStdout", (chunk) => stdout.push(chunk)),
+    sidecarEmitter.addListener("sidecarStderr", (chunk) => stderr.push(chunk)),
     sidecarEmitter.addListener("sidecarExit", (info) => {
       for (const listener of exitListeners) listener(info);
     }),

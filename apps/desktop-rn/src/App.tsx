@@ -93,6 +93,9 @@ function App(): JSX.Element {
                 case "wsTicket":
                   appendLog("WebSocket ticket issued");
                   break;
+                case "debug":
+                  appendLog(event.detail);
+                  break;
                 case "sidecarExit":
                   appendLog(`sidecar exited (code ${event.code})`);
                   setPhase((current) =>
@@ -122,7 +125,8 @@ function App(): JSX.Element {
               cause instanceof ConnectFailure
                 ? cause
                 : new ConnectFailure({ stage: "rpc", message: String(cause) });
-            devLog(`[u007] failed at ${failure.stage}: ${failure.message}`);
+            const stack = cause instanceof Error && cause.stack ? `\n${cause.stack}` : "";
+            devLog(`[u007] failed at ${failure.stage}: ${failure.message}${stack}`);
             setPhase({ tag: "failed", stage: failure.stage, message: failure.message });
           });
       })

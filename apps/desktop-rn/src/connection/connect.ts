@@ -2,7 +2,6 @@ import {
   bootstrapRemoteBearerSession,
   resolveRemoteWebSocketConnectionUrl,
 } from "@t3tools/client-runtime/authorization";
-import { remoteHttpClientLayer } from "@t3tools/client-runtime/rpc";
 import { WS_METHODS, WsRpcGroup } from "@t3tools/contracts";
 import * as Data from "effect/Data";
 import * as Effect from "effect/Effect";
@@ -12,9 +11,19 @@ import * as Schedule from "effect/Schedule";
 import type * as Scope from "effect/Scope";
 import * as Socket from "effect/unstable/socket/Socket";
 import * as Stream from "effect/Stream";
+import { FetchHttpClient, HttpClient } from "effect/unstable/http";
 import { RpcClient, RpcSerialization } from "effect/unstable/rpc";
 
 import { spawnSidecar, type RunningSidecar } from "../sidecar/spawner";
+import { rawWebSocketProbe } from "./rawProbe";
+
+// Mirrors client-runtime's remoteHttpClientLayer (fetch-based, Hermes-safe);
+// inlined so the app does not depend on the client-runtime /rpc barrel at
+// runtime.
+const remoteHttpClientLayer = (
+  fetchFn: typeof globalThis.fetch,
+): Layer.Layer<HttpClient.HttpClient> =>
+  FetchHttpClient.layer.pipe(Layer.provide(Layer.succeed(FetchHttpClient.Fetch, fetchFn)));
 
 export const CONNECT_STAGES = ["spawn", "handshake", "exchange", "ticket", "ws", "rpc"] as const;
 
@@ -59,6 +68,14 @@ const describeCause = (cause: unknown): string => {
   return String(cause);
 };
 
+// Socket failures bury the underlying event in a cause chain; surface it all.
+const describeCauseDeep = (cause: unknown, depth = 0): string => {
+  if (depth > 4 || typeof cause !== "object" || cause === null) return describeCause(cause);
+  const own = describeCause(cause);
+  const inner = (cause as { cause?: unknown }).cause;
+  return inner === undefined ? own : `${own} | cause: ${describeCauseDeep(inner, depth + 1)}`;
+};
+
 const HANDSHAKE_TIMEOUT = "30 seconds";
 const SESSION_READY_TIMEOUT = "15 seconds";
 
@@ -66,7 +83,17 @@ const SESSION_READY_TIMEOUT = "15 seconds";
 // serialization, and the socket protocol client over the real WsRpcGroup.
 const firstServerConfigSnapshot = (
   socketUrl: string,
+  onEvent: ConnectPipelineInput["onEvent"],
 ): Effect.Effect<EnvironmentSnapshot, ConnectFailure, Scope.Scope> => {
+  // Raw probe on the exact same URL while effect's socket opens; a split
+  // verdict locates the failure (effect usage vs URL/ticket).
+  rawWebSocketProbe(socketUrl).then((result) =>
+    onEvent({ tag: "debug", detail: `raw probe: ${result}` }),
+  );
+  onEvent({
+    tag: "debug",
+    detail: `ws attempt: ${socketUrl.replace(/wsTicket=[^&]+/, (m) => `wsTicket=<len ${m.length - 9}>`)}`,
+  });
   const hooks = RpcClient.ConnectionHooks.of({
     onConnect: Effect.void,
     onDisconnect: Effect.void,
@@ -108,7 +135,9 @@ const firstServerConfigSnapshot = (
     ),
     Effect.provide(protocolLayer),
     Effect.timeout(SESSION_READY_TIMEOUT),
-    Effect.mapError((cause) => new ConnectFailure({ stage: "rpc", message: describeCause(cause) })),
+    Effect.mapError(
+      (cause) => new ConnectFailure({ stage: "rpc", message: describeCauseDeep(cause) }),
+    ),
   );
 };
 
@@ -187,6 +216,7 @@ export type ConnectEvent =
   | { readonly tag: "handshake"; readonly port: number }
   | { readonly tag: "bearerSession"; readonly expiresIn: number }
   | { readonly tag: "wsTicket" }
+  | { readonly tag: "debug"; readonly detail: string }
   | { readonly tag: "sidecarExit"; readonly code: number };
 
 export interface ConnectPipelineInput {
@@ -210,6 +240,11 @@ export const runConnectionPipeline = (
     input.onEvent({ tag: "stage", stage: "handshake" });
     const handshake = yield* handshakeFromLines(sidecar);
     input.onEvent({ tag: "handshake", port: handshake.port });
+    // The sidecar logs server activity on stdout; surface lines after the
+    // handshake so upgrade failures are visible in the diagnostic screen.
+    sidecar.onLine((line) =>
+      input.onEvent({ tag: "debug", detail: `sidecar: ${line.slice(0, 160)}` }),
+    );
 
     const httpBaseUrl = `http://127.0.0.1:${handshake.port}`;
     const wsBaseUrl = `ws://127.0.0.1:${handshake.port}`;
@@ -248,5 +283,5 @@ export const runConnectionPipeline = (
 
     input.onEvent({ tag: "stage", stage: "ws" });
     input.onEvent({ tag: "stage", stage: "rpc" });
-    return yield* Effect.scoped(firstServerConfigSnapshot(wsUrl));
+    return yield* Effect.scoped(firstServerConfigSnapshot(wsUrl, input.onEvent));
   }).pipe(Effect.provide(remoteHttpClientLayer(globalThis.fetch)));
