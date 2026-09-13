@@ -1,7 +1,8 @@
-import { useCallback, useMemo, type JSX } from "react";
+import { useCallback, useEffect, useMemo, type JSX } from "react";
 import { StyleSheet, View } from "react-native";
 
 import { AppText, tokens } from "../components/AppText";
+import { seedMarkdownFixture } from "../markdown/fixture";
 import { buildStreamListItems } from "./listModel";
 import { Composer } from "./Composer";
 import { MessageStream } from "./MessageStream";
@@ -65,6 +66,12 @@ export function ThreadView(props: {
   const stream = useThreadStreamState(props.session.threadStore);
   const items = useMemo(() => buildStreamListItems(stream.thread, stream.notice), [stream]);
   const labels = composerLabels(stream);
+
+  // U-024 dev fixture: renders the markdown showcase thread when the fixture
+  // sidebar row is selected with T3CODE_RN_MARKDOWN_FIXTURE set; inert otherwise.
+  useEffect(() => {
+    seedMarkdownFixture(props.session.threadStore, props.threadId);
+  }, [props.session.threadStore, props.threadId]);
 
   const handleSend = useCallback(
     (text: string) =>

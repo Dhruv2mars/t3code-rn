@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState, type JSX } from "react";
 import { Pressable, ScrollView, StyleSheet, View } from "react-native";
 
 import { AppText, tokens } from "../components/AppText";
+import { Markdown, messageBody } from "../markdown/Markdown";
 import type { StreamListItem } from "./listModel";
 
 const NEAR_BOTTOM_PX = 80;
@@ -32,9 +33,7 @@ const styles = StyleSheet.create({
     color: tokens.accent,
   },
   body: {
-    color: tokens.foreground,
-    fontSize: 14,
-    lineHeight: 20,
+    ...messageBody,
   },
   caret: {
     color: tokens.accent,
@@ -79,10 +78,14 @@ function MessageRow({ item }: { readonly item: Extract<StreamListItem, { type: "
       >
         {item.role}
       </AppText>
-      <AppText style={styles.body}>
-        {item.text}
-        {item.streaming ? <AppText style={styles.caret}> ▍</AppText> : null}
-      </AppText>
+      {item.role === "user" ? (
+        <AppText style={styles.body}>
+          {item.text}
+          {item.streaming ? <AppText style={styles.caret}> ▍</AppText> : null}
+        </AppText>
+      ) : (
+        <Markdown streaming={item.streaming} text={item.text} />
+      )}
     </View>
   );
 }
