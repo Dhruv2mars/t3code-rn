@@ -13,15 +13,16 @@ import { T3SidecarSpawner } from "../sidecar/spawner";
 import type { ThreadStreamStore } from "../thread/stores";
 
 /**
- * Dev-only markdown fixture (U-024 verification): selecting the sidebar
- * fixture row "Build an Effect-TS CLI" seeds this thread through the real
- * ThreadStreamStore path when T3CODE_RN_MARKDOWN_FIXTURE is set. No provider
- * is ever contacted — the fixture text is static and the "stream" mode only
- * replays snapshots with growing text.
+ * Dev-only markdown fixture (U-024 verification): when T3CODE_RN_MARKDOWN_FIXTURE
+ * is set at launch, the thread pane renders this static thread through the real
+ * ThreadStreamStore path — either when the matching sidebar fixture row is
+ * selected or when nothing is selected yet. No provider is ever contacted; the
+ * fixture text is static and the "stream" mode only replays snapshots with
+ * growing text.
  *
  * Modes: T3CODE_RN_MARKDOWN_FIXTURE=1 settled showcase.
- *        T3CODE_RN_MARKDOWN_FIXTURE=stream showcase + a streaming message
- *        held mid-fence for ~6s so partial rendering can be screenshotted.
+ *        T3CODE_RN_MARKDOWN_FIXTURE=stream showcase + a streaming message held
+ *        mid-fence for ~15s so partial rendering can be screenshotted.
  */
 
 export const MARKDOWN_FIXTURE_ENV = "T3CODE_RN_MARKDOWN_FIXTURE";
@@ -68,8 +69,7 @@ const SHOWCASE = [
 const STREAM_PARTS = [
   "Streaming check: this paragraph is arriving **mid-token and the fence below is intentionally unterminated while the stream is live.",
   "\n\n```ts\nconst pipeline = Effect.gen(function* () {\n  const snap = yield* subscribeThread;",
-  "\n  yield* render(snap);\n});\n```",
-  "\n\nThe fence closed and the turn completed.",
+  "\n  yield* render(snap);\n});\n```\n\nThe fence closed and the turn completed.",
 ] as const;
 
 const message = (
@@ -141,12 +141,12 @@ const schedule = (store: ThreadStreamStore, delayMs: number, apply: () => void):
 };
 
 /**
- * Called from ThreadView on selection. Inert unless the selected thread is the
- * markdown fixture row and the launch env carries the fixture flag, so the
- * production path (and the live thread subscription) never sees it.
+ * Called from ThreadView on mount and selection. Inert unless the launch env
+ * carries the fixture flag AND nothing (or the fixture row) is selected, so
+ * the production path and live thread subscriptions never see it.
  */
 export const seedMarkdownFixture = (store: ThreadStreamStore, threadId: string | null): void => {
-  if (threadId !== MARKDOWN_FIXTURE_THREAD_ID) return;
+  if (threadId !== null && threadId !== MARKDOWN_FIXTURE_THREAD_ID) return;
   void T3SidecarSpawner?.launchEnvironment()
     .then((env) => {
       const mode = env[MARKDOWN_FIXTURE_ENV];
@@ -160,21 +160,13 @@ export const seedMarkdownFixture = (store: ThreadStreamStore, threadId: string |
         kind: "snapshot",
         snapshot: snapshotItem(streamingThread(STREAM_PARTS[0]!, true)),
       });
-      schedule(store, 6000, () =>
+      schedule(store, 15000, () =>
         store.apply({
           kind: "snapshot",
           snapshot: snapshotItem(streamingThread(STREAM_PARTS[0]! + STREAM_PARTS[1]!, true)),
         }),
       );
-      schedule(store, 12000, () =>
-        store.apply({
-          kind: "snapshot",
-          snapshot: snapshotItem(
-            streamingThread(STREAM_PARTS[0]! + STREAM_PARTS[1]! + STREAM_PARTS[2]!, true),
-          ),
-        }),
-      );
-      schedule(store, 18000, () =>
+      schedule(store, 30000, () =>
         store.apply({
           kind: "snapshot",
           snapshot: snapshotItem(streamingThread(STREAM_PARTS.join(""), false)),

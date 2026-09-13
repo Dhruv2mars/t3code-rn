@@ -68,7 +68,7 @@ export function ThreadView(props: {
   const labels = composerLabels(stream);
 
   // U-024 dev fixture: renders the markdown showcase thread when the fixture
-  // sidebar row is selected with T3CODE_RN_MARKDOWN_FIXTURE set; inert otherwise.
+  // flag is set at launch and nothing (or the fixture row) is selected.
   useEffect(() => {
     seedMarkdownFixture(props.session.threadStore, props.threadId);
   }, [props.session.threadStore, props.threadId]);
