@@ -12,10 +12,11 @@ import type { KeyEvent } from "react-native/Libraries/Types/CoreEventTypes";
 
 import type { EnvironmentSnapshot } from "../connection/connect";
 import { devLog } from "../devLog";
-import { tokens } from "../components/AppText";
 import type { ThreadSession } from "../thread/session";
 import { useShellState } from "../thread/stores";
 import { ContentPane, KEYBOARD_EVENTS } from "./ContentPane";
+import { sidebarColors } from "./colors";
+import { FIXTURE_PROJECTS, FIXTURE_THREADS } from "./fixtures";
 import { Sidebar } from "./Sidebar";
 import {
   buildShellListItems,
@@ -33,18 +34,10 @@ const clampSidebarWidth = (width: number): number =>
 
 const styles = StyleSheet.create({
   handle: {
-    alignItems: "center",
-    justifyContent: "center",
     width: 6,
   },
-  handleBar: {
-    backgroundColor: tokens.subtleStrong,
-    borderRadius: 2,
-    height: 64,
-    width: 2,
-  },
   root: {
-    backgroundColor: tokens.screen,
+    backgroundColor: sidebarColors.sidebarBg,
     flexDirection: "row",
     height: "100%",
     width: "100%",
@@ -52,9 +45,10 @@ const styles = StyleSheet.create({
 });
 
 /**
- * Desktop shell (U-008/U-011): sidebar over the live shell subscription and
- * the content pane running the live thread view. All state lives here because
- * the keyboard track, the sidebar resize, and both panes consume it.
+ * Desktop shell (U-008/U-011/U-025): parity sidebar over the live shell
+ * subscription merged with the fixture threads, and the content pane running
+ * the live thread view. All state lives here because the keyboard track, the
+ * sidebar resize, and both panes consume it.
  */
 export function DesktopShell({
   snapshot,
@@ -66,6 +60,7 @@ export function DesktopShell({
   const shell = useShellState(session.shellStore);
   const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_DEFAULT_WIDTH);
   const [query, setQuery] = useState("");
+  const [settledExpanded, setSettledExpanded] = useState(false);
   // On macOS the window never hands keyboard focus to a React view on its
   // own (no view is first responder until something claims it), so the shell
   // root claims first responder on mount; keyDownEvents route from there.
@@ -73,22 +68,39 @@ export function DesktopShell({
   useEffect(() => {
     rootRef.current?.focus();
   }, []);
+  const projects = useMemo(() => {
+    const liveIds = new Set(shell.projects.map((project) => project.id));
+    return [...shell.projects, ...FIXTURE_PROJECTS.filter((project) => !liveIds.has(project.id))];
+  }, [shell.projects]);
+  const threads = useMemo(() => {
+    const liveIds = new Set(shell.threads.map((thread) => thread.id));
+    return [...shell.threads, ...FIXTURE_THREADS.filter((thread) => !liveIds.has(thread.id))];
+  }, [shell.threads]);
   const [items, threadIds] = useMemo(() => {
     const nextItems = buildShellListItems(
-      groupThreadsByProject(shell.projects, shell.threads),
+      groupThreadsByProject(projects, threads),
       query,
+      settledExpanded,
     );
     return [nextItems, listThreadIds(nextItems)] as const;
-  }, [query, shell.projects, shell.threads]);
+  }, [projects, query, settledExpanded, threads]);
   const [highlightedId, setHighlightedId] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  // Fixture rows have no server thread behind them; selecting one stays
+  // visual so the live thread subscription never sees a synthetic id.
+  const fixtureThreadIds = useMemo(
+    () => new Set<string>(FIXTURE_THREADS.map((thread) => thread.id)),
+    [],
+  );
 
   const selectThread = useCallback(
     (threadId: string | null) => {
       setSelectedId(threadId);
+      if (threadId !== null && fixtureThreadIds.has(threadId)) return;
       session.selectThread(threadId);
     },
-    [session],
+    [fixtureThreadIds, session],
   );
 
   const sidebarWidthRef = useRef(SIDEBAR_DEFAULT_WIDTH);
@@ -146,16 +158,18 @@ export function DesktopShell({
     setQuery(nextQuery);
   }, []);
 
+  const handleToggleSettled = useCallback(() => {
+    setSettledExpanded((expanded) => !expanded);
+  }, []);
+
   const selectedThread =
-    selectedId === null ? undefined : shell.threads.find((thread) => thread.id === selectedId);
+    selectedId === null ? undefined : threads.find((thread) => thread.id === selectedId);
   const highlightedThread =
-    highlightedId === null
-      ? undefined
-      : shell.threads.find((thread) => thread.id === highlightedId);
+    highlightedId === null ? undefined : threads.find((thread) => thread.id === highlightedId);
   const selectedProject =
     selectedThread === undefined
       ? undefined
-      : shell.projects.find((project) => project.id === selectedThread.projectId);
+      : projects.find((project) => project.id === selectedThread.projectId);
 
   return (
     <View
@@ -168,16 +182,15 @@ export function DesktopShell({
       <Sidebar
         highlightedId={highlightedId}
         items={items}
-        onSelectThread={handleSelectThread}
-        query={query}
         onQueryChange={handleQueryChange}
+        onSelectThread={handleSelectThread}
+        onToggleSettled={handleToggleSettled}
+        query={query}
         selectedId={selectedId}
-        serverLabel={`${snapshot.label} · server ${snapshot.serverVersion}`}
+        settledExpanded={settledExpanded}
         width={sidebarWidth}
       />
-      <View {...resizeResponder.panHandlers} style={styles.handle}>
-        <View style={styles.handleBar} />
-      </View>
+      <View {...resizeResponder.panHandlers} style={styles.handle} />
       <ContentPane
         highlightedTitle={highlightedThread?.title ?? "none"}
         onKeyDown={handleKeyDown}
