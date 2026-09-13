@@ -1,3 +1,4 @@
+// @effect-diagnostics globalDate:off -- The relative-time label anchors to wall-clock now at launch; Intl formatting lives in listModel.
 import { memo, useCallback, useState } from "react";
 import { ScrollView } from "react-native";
 import { Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
@@ -7,7 +8,7 @@ import type { OrchestrationProjectShell, OrchestrationThreadShell } from "@t3too
 import { AppText, AppTextInput, tokens } from "../components/AppText";
 import { formatRelativeTime, type ShellListItem } from "./listModel";
 
-const NOW = "2026-09-13T09:00:00.000Z";
+const NOW = new Date().toISOString();
 
 /** Deterministic accent per project id; stand-in for real project favicons. */
 const PROJECT_ACCENTS = ["#6366f1", "#10b981", "#f59e0b", "#0ea5e9"];

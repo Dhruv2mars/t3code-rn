@@ -1,4 +1,5 @@
 // @effect-diagnostics globalDate:off -- Command timestamps are ISO strings built in plain async send callbacks outside the Effect runtime.
+import * as Option from "effect/Option";
 import * as Schema from "effect/Schema";
 import * as Effect from "effect/Effect";
 import * as Layer from "effect/Layer";
@@ -109,8 +110,33 @@ export const openThreadSession = (input: OpenThreadSessionInput): void => {
       return yield* Effect.scoped(
         Effect.gen(function* () {
           const client = yield* RpcClient.make(WsRpcGroup);
+          input.onEvent({ tag: "debug", detail: "rpc client created" });
           const shellStore = new ShellStore();
           const threadStore = new ThreadStreamStore();
+
+          // One-shot config snapshot on the same socket: the U-007 proof that
+          // the RPC exchange is live, carried by the session itself. Taken
+          // before any long-lived subscription forks.
+          const snapshotHead = yield* client[WS_METHODS.subscribeServerConfig]({}).pipe(
+            Stream.take(1),
+            Stream.runHead,
+            Effect.timeout("30 seconds"),
+            Effect.mapError(
+              (cause) =>
+                new ConnectFailure({
+                  stage: "rpc",
+                  message: `config snapshot: ${describeCause(cause)}`,
+                }),
+            ),
+          );
+          input.onEvent({ tag: "debug", detail: "config snapshot frame received" });
+          if (Option.isNone(snapshotHead)) {
+            return yield* new ConnectFailure({
+              stage: "rpc",
+              message: "subscribeServerConfig ended without a snapshot event",
+            });
+          }
+          const snapshot = snapshotOf(snapshotHead.value);
 
           yield* client[ORCHESTRATION_WS_METHODS.subscribeShell]({}).pipe(
             Stream.runForEach((item) =>
@@ -166,22 +192,6 @@ export const openThreadSession = (input: OpenThreadSessionInput): void => {
               client[ORCHESTRATION_WS_METHODS.dispatchCommand](command).pipe(Effect.asVoid),
             );
 
-          // One-shot config snapshot on the same socket: the U-007 proof that
-          // the RPC exchange is live, now carried by the session itself.
-          const snapshotEvent = yield* client[WS_METHODS.subscribeServerConfig]({}).pipe(
-            Stream.take(1),
-            Stream.runHead,
-          );
-          if (snapshotEvent === undefined) {
-            return yield* Effect.fail(
-              new ConnectFailure({
-                stage: "rpc",
-                message: "subscribeServerConfig ended without a snapshot event",
-              }),
-            );
-          }
-          const snapshot = snapshotOf(snapshotEvent);
-
           const pickModelSelection = async (): Promise<ModelSelection | null> => {
             const config = await Effect.runPromise(client[WS_METHODS.serverGetConfig]({}));
             for (const provider of config.providers) {
@@ -217,20 +227,23 @@ export const openThreadSession = (input: OpenThreadSessionInput): void => {
           const sendUserMessage = async (text: string): Promise<void> => {
             const createdAt = new Date().toISOString();
             try {
+              // Turn start only needs the thread id; the detail snapshot may
+              // still be syncing on a freshly selected thread.
+              const selectedId = selectedThreadId;
               const activeThread = threadStore.getSnapshot().thread;
-              if (activeThread !== null) {
+              if (selectedId !== null) {
                 await dispatch({
                   type: "thread.turn.start",
                   commandId: decodeCommandId(randomId()),
-                  threadId: activeThread.id,
+                  threadId: decodeThreadId(selectedId),
                   message: {
                     messageId: decodeMessageId(randomId()),
                     role: "user",
                     text,
                     attachments: [],
                   },
-                  runtimeMode: activeThread.runtimeMode,
-                  interactionMode: activeThread.interactionMode,
+                  runtimeMode: activeThread?.runtimeMode ?? "full-access",
+                  interactionMode: activeThread?.interactionMode ?? "default",
                   createdAt,
                 });
                 return;
