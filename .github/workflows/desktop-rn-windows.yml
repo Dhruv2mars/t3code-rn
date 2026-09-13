@@ -51,6 +51,10 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Autolink windows project
+        working-directory: apps/desktop-rn
+        run: npx @react-native-community/cli autolink-windows --sln windows/T3CodeRN.sln --proj windows/T3CodeRN/T3CodeRN.vcxproj
+
       - name: Check react-native-windows CLI
         working-directory: apps/desktop-rn
         run: npx react-native windows --help
