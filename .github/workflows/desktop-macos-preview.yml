@@ -24,6 +24,7 @@ jobs:
   build:
     name: Build macOS Apple Silicon preview
     if: >-
+      github.repository == 'pingdotgg/t3code' &&
       github.event.action != 'closed' &&
       github.event.action != 'unlabeled' &&
       github.event.pull_request.head.repo.full_name == github.repository &&
@@ -123,6 +124,7 @@ jobs:
   # build never notifies release watchers. This job holds the write token and
   # only handles the artifact the build job produced; it never runs PR code.
   publish:
+    if: github.repository == 'pingdotgg/t3code'
     name: Publish anonymous download
     needs: build
     runs-on: blacksmith-8vcpu-ubuntu-2404
@@ -286,6 +288,7 @@ jobs:
   cleanup:
     name: Remove preview download
     if: >-
+      github.repository == 'pingdotgg/t3code' &&
       github.event.pull_request.head.repo.full_name == github.repository &&
       ((github.event.action == 'closed' && contains(github.event.pull_request.labels.*.name, 'preview:mac')) ||
       (github.event.action == 'unlabeled' && github.event.label.name == 'preview:mac'))
