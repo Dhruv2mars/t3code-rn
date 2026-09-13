@@ -1,10 +1,10 @@
-import { memo, useCallback } from "react";
-import { LegendList, useRecyclingState } from "@legendapp/list/react-native";
-import { Pressable, View, type StyleProp, type ViewStyle } from "react-native";
+import { memo, useCallback, useState } from "react";
+import { ScrollView } from "react-native";
+import { Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from "react-native";
 
 import type { OrchestrationProjectShell, OrchestrationThreadShell } from "@t3tools/contracts";
 
-import { AppText, AppTextInput, cx } from "../components/AppText";
+import { AppText, AppTextInput, tokens } from "../components/AppText";
 import { formatRelativeTime, type ShellListItem } from "./listModel";
 
 const NOW = "2026-09-13T09:00:00.000Z";
@@ -22,29 +22,141 @@ const projectAccent = (id: string): string => {
 const listStyle: StyleProp<ViewStyle> = { flex: 1 };
 const listContentStyle: StyleProp<ViewStyle> = { paddingBottom: 12 };
 
-const keyExtractor = (item: ShellListItem): string => item.key;
-const getItemType = (item: ShellListItem): string => item.type;
+const styles = StyleSheet.create({
+  avatar: {
+    alignItems: "center",
+    borderRadius: 4,
+    height: 16,
+    justifyContent: "center",
+    width: 16,
+  },
+  avatarLetter: {
+    color: tokens.white,
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  bottomBar: {
+    borderTopColor: tokens.border,
+    borderTopWidth: 1,
+    columnGap: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  bottomItem: {
+    color: tokens.foregroundMuted,
+    fontSize: 12,
+  },
+  brandBox: {
+    alignItems: "center",
+    backgroundColor: tokens.accent,
+    borderRadius: 6,
+    height: 24,
+    justifyContent: "center",
+    width: 24,
+  },
+  brandRow: {
+    alignItems: "center",
+    columnGap: 8,
+    flexDirection: "row",
+    paddingBottom: 8,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+  },
+  brandTitle: {
+    color: tokens.foreground,
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  headerRow: {
+    alignItems: "center",
+    columnGap: 8,
+    flexDirection: "row",
+    paddingBottom: 4,
+    paddingHorizontal: 16,
+    paddingTop: 12,
+  },
+  headerTitle: {
+    color: tokens.foregroundMuted,
+    fontSize: 12,
+    fontWeight: "600",
+    letterSpacing: 0.5,
+    textTransform: "uppercase",
+  },
+  hoverActions: {
+    columnGap: 12,
+    flexDirection: "row",
+    marginLeft: 8,
+  },
+  hoverAction: {
+    color: tokens.foregroundSecondary,
+    fontSize: 12,
+  },
+  row: {
+    alignItems: "center",
+    flexDirection: "row",
+    height: 44,
+    paddingHorizontal: 16,
+  },
+  rowHighlighted: {
+    backgroundColor: tokens.subtle,
+  },
+  rowSelected: {
+    backgroundColor: tokens.subtleStrong,
+  },
+  rowSelectedBar: {
+    backgroundColor: tokens.accent,
+    borderRadius: 2,
+    height: 16,
+    marginLeft: 4,
+    width: 2,
+  },
+  rowPress: {
+    alignItems: "center",
+    flex: 1,
+    flexDirection: "row",
+    height: "100%",
+  },
+  rowTitle: {
+    color: tokens.foreground,
+    flex: 1,
+    fontSize: 14,
+  },
+  rowTime: {
+    color: tokens.foregroundMuted,
+    fontSize: 12,
+    marginLeft: 8,
+  },
+  searchWrap: {
+    paddingBottom: 8,
+    paddingHorizontal: 12,
+  },
+  serverLabel: {
+    color: tokens.foregroundMuted,
+    flex: 1,
+    fontSize: 12,
+    textAlign: "right",
+  },
+  sidebar: {
+    backgroundColor: tokens.sidebar,
+    height: "100%",
+  },
+});
 
 function ProjectAvatar({ project }: { readonly project: OrchestrationProjectShell }) {
   return (
-    <View
-      className="h-4 w-4 items-center justify-center rounded"
-      style={{ backgroundColor: projectAccent(project.id) }}
-    >
-      <AppText className="text-2xs font-bold text-white">
-        {project.title.slice(0, 1).toUpperCase()}
-      </AppText>
+    <View style={[styles.avatar, { backgroundColor: projectAccent(project.id) }]}>
+      <AppText style={styles.avatarLetter}>{project.title.slice(0, 1).toUpperCase()}</AppText>
     </View>
   );
 }
 
 function ProjectHeader({ project }: { readonly project: OrchestrationProjectShell }) {
   return (
-    <View className="flex-row items-center gap-2 px-4 pb-1 pt-3">
+    <View style={styles.headerRow}>
       <ProjectAvatar project={project} />
-      <AppText className="text-2xs font-semibold uppercase tracking-wide text-foreground-muted">
-        {project.title}
-      </AppText>
+      <AppText style={styles.headerTitle}>{project.title}</AppText>
     </View>
   );
 }
@@ -56,39 +168,39 @@ const ThreadRow = memo(function ThreadRow(props: {
   readonly onSelect: (threadId: string) => void;
 }) {
   // Hover resets when the row is recycled onto another thread.
-  const [hovered, setHovered] = useRecyclingState(false);
-  const background = props.isSelected
-    ? "bg-subtle-strong"
-    : props.isHighlighted || hovered
-      ? "bg-subtle"
-      : undefined;
+  const [hovered, setHovered] = useState(false);
+  const highlighted = props.isHighlighted || hovered;
   return (
     <View
-      className={cx("h-11 flex-row items-center px-4", background)}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
+      style={[
+        styles.row,
+        highlighted ? styles.rowHighlighted : null,
+        props.isSelected ? styles.rowSelected : null,
+      ]}
     >
       <Pressable
         accessibilityLabel={`Select thread ${props.thread.title}`}
         accessibilityRole="button"
-        className="h-full flex-1 flex-row items-center"
         onPress={() => props.onSelect(props.thread.id)}
+        style={styles.rowPress}
       >
-        <AppText numberOfLines={1} className="flex-1 text-sm text-foreground">
+        <AppText numberOfLines={1} style={styles.rowTitle}>
           {props.thread.title}
         </AppText>
         {hovered ? (
-          <View className="ml-2 flex-row gap-3">
-            <AppText className="text-2xs text-foreground-secondary">Snooze</AppText>
-            <AppText className="text-2xs text-foreground-secondary">Settle</AppText>
+          <View style={styles.hoverActions}>
+            <AppText style={styles.hoverAction}>Snooze</AppText>
+            <AppText style={styles.hoverAction}>Settle</AppText>
           </View>
         ) : (
-          <AppText className="ml-2 text-2xs text-foreground-muted">
+          <AppText style={styles.rowTime}>
             {formatRelativeTime(props.thread.updatedAt, NOW)}
           </AppText>
         )}
       </Pressable>
-      {props.isSelected ? <View className="ml-1 h-4 w-0.5 rounded bg-accent" /> : null}
+      {props.isSelected ? <View style={styles.rowSelectedBar} /> : null}
     </View>
   );
 });
@@ -119,15 +231,15 @@ export function Sidebar(props: {
   );
 
   return (
-    <View className="h-full flex-col bg-sidebar" style={{ width: props.width }}>
-      <View className="flex-row items-center gap-2 px-4 pb-2 pt-3">
-        <View className="h-6 w-6 items-center justify-center rounded-md bg-accent">
-          <AppText className="text-2xs font-bold text-white">T3</AppText>
+    <View style={[styles.sidebar, { width: props.width }]}>
+      <View style={styles.brandRow}>
+        <View style={styles.brandBox}>
+          <AppText style={styles.avatarLetter}>T3</AppText>
         </View>
-        <AppText className="text-sm font-bold text-foreground">T3 Code</AppText>
-        <AppText className="text-2xs text-foreground-muted">Nightly</AppText>
+        <AppText style={styles.brandTitle}>T3 Code</AppText>
+        <AppText style={styles.bottomItem}>Nightly</AppText>
       </View>
-      <View className="px-3 pb-2">
+      <View style={styles.searchWrap}>
         <AppTextInput
           accessibilityLabel="Search threads"
           onChangeText={props.onQueryChange}
@@ -135,23 +247,17 @@ export function Sidebar(props: {
           value={props.query}
         />
       </View>
-      <LegendList
-        contentContainerStyle={listContentStyle}
-        data={props.items}
-        estimatedItemSize={44}
-        extraData={`${props.highlightedId}:${props.selectedId}`}
-        getItemType={getItemType}
-        keyExtractor={keyExtractor}
-        recycleItems
-        renderItem={renderItem}
-        style={listStyle}
-      />
-      <View className="flex-row items-center gap-4 border-t border-border px-4 py-2.5">
-        <AppText className="text-2xs text-foreground-muted">Settings</AppText>
-        <AppText className="text-2xs text-foreground-muted">Pull Requests</AppText>
-        <AppText className="text-2xs text-foreground-muted">Usage</AppText>
+      <ScrollView contentContainerStyle={listContentStyle} style={listStyle}>
+        {props.items.map((item) => (
+          <View key={item.key}>{renderItem({ item })}</View>
+        ))}
+      </ScrollView>
+      <View style={styles.bottomBar}>
+        <AppText style={styles.bottomItem}>Settings</AppText>
+        <AppText style={styles.bottomItem}>Pull Requests</AppText>
+        <AppText style={styles.bottomItem}>Usage</AppText>
         {props.serverLabel ? (
-          <AppText numberOfLines={1} className="flex-1 text-right text-2xs text-foreground-muted">
+          <AppText numberOfLines={1} style={styles.serverLabel}>
             {props.serverLabel}
           </AppText>
         ) : null}

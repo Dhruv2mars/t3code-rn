@@ -29,9 +29,7 @@
     "@react-native/babel-preset": "0.81.6",
     "@react-native/metro-config": "0.81.6",
     "@types/react": "~19.2.0",
-    "tailwindcss": "catalog:",
     "typescript": "catalog:",
-    "uniwind": "1.11.0",
     "vite-plus": "catalog:"
   }
 }

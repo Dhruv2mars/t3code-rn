@@ -1,9 +1,10 @@
 import { useCallback, useMemo, useRef, useState, type JSX } from "react";
-import { PanResponder, View } from "react-native";
+import { PanResponder, StyleSheet, View } from "react-native";
 import type { KeyEvent } from "react-native/Libraries/Types/CoreEventTypes";
 
 import type { EnvironmentSnapshot } from "../connection/connect";
 import { devLog } from "../devLog";
+import { tokens } from "../components/AppText";
 import { ContentPane, KEYBOARD_EVENTS } from "./ContentPane";
 import { Sidebar } from "./Sidebar";
 import { FIXTURE_PROJECTS, FIXTURE_THREADS } from "./fixtures";
@@ -27,6 +28,26 @@ const projectById = new Map<string, (typeof FIXTURE_PROJECTS)[number]>(
 
 const clampSidebarWidth = (width: number): number =>
   Math.min(SIDEBAR_MAX_WIDTH, Math.max(SIDEBAR_MIN_WIDTH, width));
+
+const styles = StyleSheet.create({
+  handle: {
+    alignItems: "center",
+    justifyContent: "center",
+    width: 6,
+  },
+  handleBar: {
+    backgroundColor: tokens.subtleStrong,
+    borderRadius: 2,
+    height: 64,
+    width: 2,
+  },
+  root: {
+    backgroundColor: tokens.screen,
+    flexDirection: "row",
+    height: "100%",
+    width: "100%",
+  },
+});
 
 /**
  * Desktop shell (U-008): sidebar with grouped fixture threads + content pane.
@@ -107,12 +128,7 @@ export function DesktopShell({
   const selectedProject = selectedThread ? projectById.get(selectedThread.projectId) : undefined;
 
   return (
-    <View
-      className="h-full w-full flex-row bg-screen"
-      focusable
-      keyDownEvents={KEYBOARD_EVENTS}
-      onKeyDown={handleKeyDown}
-    >
+    <View focusable keyDownEvents={KEYBOARD_EVENTS} onKeyDown={handleKeyDown} style={styles.root}>
       <Sidebar
         highlightedId={highlightedId}
         items={items}
@@ -123,8 +139,8 @@ export function DesktopShell({
         serverLabel={`${snapshot.label} · server ${snapshot.serverVersion}`}
         width={sidebarWidth}
       />
-      <View className="w-1.5 items-center justify-center" {...resizeResponder.panHandlers}>
-        <View className="h-16 w-0.5 rounded bg-subtle-strong" />
+      <View {...resizeResponder.panHandlers} style={styles.handle}>
+        <View style={styles.handleBar} />
       </View>
       <ContentPane
         highlightedTitle={highlightedThread?.title ?? "none"}

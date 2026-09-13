@@ -3,8 +3,6 @@ import { useEffect, useRef, useState } from "react";
 import { ScrollView, StyleSheet, Text, View } from "react-native";
 import * as Effect from "effect/Effect";
 
-import "../global.css";
-
 import { devLog } from "./devLog";
 
 import {

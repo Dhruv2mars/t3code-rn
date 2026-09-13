@@ -1,4 +1,5 @@
 import {
+  StyleSheet,
   Text as RNText,
   TextInput as RNTextInput,
   type TextInputProps as RNTextInputProps,
@@ -7,40 +8,58 @@ import {
 
 import type { Ref } from "react";
 
-export type AppTextProps = RNTextProps & { readonly className?: string };
+/** Desktop shell tokens — values from the T3 desktop visual language captured
+ * in orchestrate/t3code-rn/parity-reference.md. Dark-only for now. */
+export const tokens = {
+  screen: "#101014",
+  sidebar: "#0c0c10",
+  foreground: "#f5f5f5",
+  foregroundSecondary: "#a3a3a3",
+  foregroundMuted: "#8e8e93",
+  border: "rgba(255, 255, 255, 0.06)",
+  subtle: "rgba(255, 255, 255, 0.04)",
+  subtleStrong: "rgba(255, 255, 255, 0.08)",
+  input: "#141419",
+  inputBorder: "rgba(255, 255, 255, 0.08)",
+  placeholder: "#8e8e93",
+  accent: "#6366f1",
+  white: "#ffffff",
+} as const;
 
-/** Joins truthy class strings; desktop-rn keeps the mobile AppText shape
- * without the tailwind-merge dependency (all classes are unit-local). */
-export function cx(...classes: ReadonlyArray<string | undefined>): string {
-  return classes.filter(Boolean).join(" ");
-}
+const styles = StyleSheet.create({
+  input: {
+    backgroundColor: tokens.input,
+    borderColor: tokens.inputBorder,
+    borderRadius: 8,
+    borderWidth: 1,
+    color: tokens.foreground,
+    fontSize: 14,
+    minHeight: 36,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  text: {
+    color: tokens.foreground,
+  },
+});
 
-/**
- * Thin wrapper around RN Text with default foreground color.
- * Uses Uniwind className — no manual style parsing.
- */
-export function AppText({ className, ...props }: AppTextProps) {
-  return <RNText className={cx("text-foreground", className)} {...props} />;
+export type AppTextProps = RNTextProps & { readonly style?: RNTextProps["style"] };
+
+/** Thin wrapper around RN Text with the default foreground color. */
+export function AppText({ style, ...props }: AppTextProps) {
+  return <RNText style={[styles.text, style]} {...props} />;
 }
 
 export type AppTextInputProps = Omit<RNTextInputProps, "placeholderTextColor"> & {
-  readonly className?: string;
   readonly ref?: Ref<RNTextInput>;
 };
 
-/**
- * Thin wrapper around RN TextInput with default input styling.
- * Uses Uniwind className — no manual style parsing.
- */
-export function AppTextInput({ className, ref, ...props }: AppTextInputProps) {
+/** Thin wrapper around RN TextInput with the default input styling. */
+export function AppTextInput({ style, ...props }: AppTextInputProps) {
   return (
     <RNTextInput
-      ref={ref}
-      className={cx(
-        "min-h-9 rounded-lg border border-input-border bg-input px-3 py-2 text-sm text-foreground",
-        className,
-      )}
-      placeholderTextColorClassName="accent-placeholder"
+      placeholderTextColor={tokens.placeholder}
+      style={[styles.input, style]}
       {...props}
     />
   );
